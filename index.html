@@ -42,7 +42,7 @@
   .sumt th{padding:3px 4px}
   .sumt td{padding:3px 4px;vertical-align:top;overflow:hidden;text-overflow:ellipsis}
   .sumt .tk{font-size:15px;line-height:1}
-  .sumt tr.custh td{background:#e9edf2;font-weight:700;font-size:12px;padding:3px 6px;border-top:1px solid #9aa3ae;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .sumt tr.custh td{border-top:8px solid #fff!important;background:#e9edf2;font-weight:700;font-size:12px;padding:3px 6px;border-top:1px solid #9aa3ae;-webkit-print-color-adjust:exact;print-color-adjust:exact}
   .sumt tr.custh span{font-weight:400;color:#555}
   .sumt tr.dimrow td{padding:0 4px 4px;font-size:11.5px;color:#333;border-bottom:1px solid #ddd}
   .sumt tr.dimrow span{display:inline-block;margin-right:14px;white-space:nowrap}
@@ -87,7 +87,9 @@
   .cs td.w{background:#fff}
   .cs .tag2{font-size:10px;line-height:1.05;color:#111;font-weight:600}
   .cs .pre{color:#666;font-size:10px}
-  .cs td.se{background:#f3f6fa;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .cs td.se{background:#fff;border-left:1.5px solid #000}
+  .cs tr.gap td{height:2.2mm;border:0;padding:0}
+  .cs tr.gap + tr td{border-top:2px solid #000}
   .cs td.sub{color:#555;font-size:9.5px}
   .cs tr{break-inside:avoid;page-break-inside:avoid}
   .cs thead{display:table-header-group}
@@ -146,6 +148,7 @@
     <button data-v="sheet">2. Print sheet</button>
     <button data-v="check">3. Check &amp; change</button>
     <button data-v="summary">4. Change list</button>
+    <a href="https://delooze29-stack.github.io/nightcheck/calculator.html" target="_blank" rel="noopener" style="color:#fff;opacity:.85;font-size:14px;align-self:center;margin-left:8px">Oversize calculator ↗</a>
   </nav>
 </header>
 <main>
@@ -190,7 +193,7 @@
     <ol class="small" style="font-size:14px;line-height:1.6">
       <li>Load the exports, then print the sheet. There's one numbered row per lift.</li>
       <li>On the floor, write S or E + height for standard/euro pallets (e.g. S70, E80), or full L, W, H for oversize. Only write kg if it's different to booked.</li>
-      <li>On step 3, type the figures in (S70 / E80, or full L W H for oversize). Press Enter to jump to the next box, or the down arrow to go straight to the same box on the next lift. Leave kg blank to use the booked weight.</li>
+      <li>On step 3, type the figures in (S70 / E80, or full L W H for oversize). Press Enter to jump to the next box, or the down arrow to go straight to the same box on the next lift. Type <b>=</b> in S / E to copy the lift above, or press <b>Same as lift 1</b> on a multi-lift con. Leave kg blank to use the booked weight.</li>
       <li>As each con is filled in, it shows straight away what to change on Palletways and what to charge.</li>
     </ol>
     <p class="small"><b>Charging rule:</b> re-key each pallet to what it should be. If the new revenue is higher, leave it. If it's lower, set it back to the original. Oversize and overweight pallets are priced on the SK rate (that pallet's rate card × %).</p>
@@ -416,18 +419,19 @@ function compactSheet(groups,lifts,d){
   const table = (src, gs) => `<table class="cs" style="margin-top:6px">${cols}
     <thead><tr class="sec"><td colspan="14">${SRC_NAME[src].toUpperCase()} – ${src==='cust'?'measure and check the charge':'check the pallet type the depot keyed'}</td></tr>
     <tr><th>Row</th><th>Con No</th><th>${src==='cust'?'Customer':'Collect from'}</th><th>Del PC</th><th>Declared</th><th>Con kg</th><th>£</th><th>Lift</th><th>S / E</th><th>L</th><th>W</th><th>H</th><th>KG</th><th>✔</th></tr></thead><tbody>
-    ${gs.map(g=>g.l.map((x,i)=>{ const c=g.c;
+    ${gs.map((g,gi)=>g.l.map((x,i)=>{ const c=g.c;
       const who = c.src==='depot' ? esc(c.colPc) : esc(c.cust);
       const info = i===0
         ? `<td class="c">${esc(c.con)}</td><td class="cu">${who}</td><td>${esc(c.pc)}</td><td class="m"><b>${esc(c.bu)}</b>${svcTag(c)?`<div class="tag2">${svcTag(c)}</div>`:''}</td><td class="m">${c.kg}</td><td class="m">${c.src==='cust'?gbp(c.rev).slice(1):'–'}</td>`
         : `<td></td><td></td><td></td><td></td><td></td><td></td>`;
       const dd=sizeDefault(c), pre=v=>dd?`<span class="pre">${v}</span>`:'';
-      return `<tr class="${i===0?'first':''}"><td class="n">${x.n}</td>${info}<td class="m">${x.l}/${c.lifts}</td><td class="w se"></td><td class="w">${pre(dd&&dd.L)}</td><td class="w">${pre(dd&&dd.W)}</td><td class="w"></td><td class="w"></td><td></td></tr>`;
+      const gap = (i===0 && gi>0 && c.src==='cust' && gs[gi-1].c.cust!==c.cust) ? '<tr class="gap"><td colspan="14"></td></tr>' : '';
+      return `${gap}<tr class="${i===0?'first':''}"><td class="n">${x.n}</td>${info}<td class="m">${x.l}/${c.lifts}</td><td class="w se"></td><td class="w">${pre(dd&&dd.L)}</td><td class="w">${pre(dd&&dd.W)}</td><td class="w"></td><td class="w"></td><td></td></tr>`;
     }).join('')).join('')}</tbody></table>`;
   return `<div class="sh-top"><div><b>SK Distribution – Night measure sheet</b><br>
       <span>Collecting depot ${esc(state.filter.cust.depot||state.filter.depot.depot||'all')} · ${groups.length} cons · ${lifts} lifts · cm / kg</span></div>
       <div class="sh-sign">Date <span class="line">${d}</span> Measured by <span class="line"></span></div></div>
-    <div class="sh-key">Standard or euro with no overhang: just write <b>S</b> or <b>E</b> + height in the S / E box (e.g. <b>S70</b>, <b>E80</b>). Oversize: write full <b>L, W, H</b>. KG only if different to booked.</div>
+    <div class="sh-key">Standard or euro with no overhang: just write <b>S</b> or <b>E</b> + height in the S / E box (e.g. <b>S70</b>, <b>E80</b>). Oversize: write full <b>L, W, H</b>. KG only if different to booked. <b>All lifts the same?</b> Fill in the first lift, then write <b>SAME</b> (or draw a line down) on the others.</div>
     ${['cust','depot'].map(src=>{ const gs=groups.filter(g=>g.c.src===src); return gs.length?table(src,gs):''; }).join('')}`;
 }
 function renderSheet(){
@@ -469,6 +473,10 @@ function groupsOf(L){ const g=[]; L.forEach(x=>{ const p=g[g.length-1]; if(p&&p.
 // noSurcharge: their agreed prices already allow for oversize, so never apply the SK oversize/overweight %.
 const SIZE_DEFAULTS=[{match:'DOORCO', L:200, W:100, noSurcharge:true}];
 function sizeDefault(c){ if(!c||c.src!=='cust') return null; const n=(c.cust||'').toUpperCase(); return SIZE_DEFAULTS.find(d=>n.includes(d.match))||null; }
+function resolveSame(c){ // copy "same as above" lifts from the lift before them
+  const L=liftList().filter(x=>x.c===c);
+  L.forEach((x,i)=>{ const m=state.m[x.n]; if(m&&m.same&&i>0){ const p=state.m[L[i-1].n]; if(p&&!p.same) state.m[x.n]=Object.assign({},p,{fromAbove:1}); } });
+}
 function dims(m,c){
   const dd=sizeDefault(c); if(dd && m && !m.code && m.H>0) m=Object.assign({}, m, {L:m.L>0?m.L:dd.L, W:m.W>0?m.W:dd.W});
   if(!m) return null; let L,W,H;
@@ -480,6 +488,7 @@ function dims(m,c){
   return {L,W,H,kg: est ? Math.round(c.kg/c.lifts*10)/10 : m.kg, est, code: sc?sc[1].toUpperCase()+sc[2]:''};
 }
 function analyseCon(c,lifts){
+  if (lifts.some(x=>state.m[x.n]?.same)) resolveSame(c);
   const measured = lifts.map(x=>({x, m:dims(state.m[x.n],c)})).filter(o=>o.m);
   if (!measured.length) return {c,status:'none',lines:[]};
   const declared=parseBU(c.bu), should={}; const lines=[];
@@ -598,7 +607,7 @@ function renderCheck(){
     ${G.map(g=>{ const c=g.c, r=analyseCon(c,g.l);
       const head = c.src!==prevSrc ? `<tbody><tr><td colspan="10" style="background:#1f3a68;color:#fff;font-weight:700">${SRC_NAME[c.src]}</td></tr></tbody>` : ''; prevSrc=c.src;
       return head + `<tbody data-id="${c.id}" data-st="${r.status}">` + g.l.map((x,i)=>{ const m=state.m[x.n]||{}, ph=state.ph?.[x.n]||{};
-        return `<tr>${i===0?`<td class="info" rowspan="${g.l.length}"><b>${esc(c.con)}</b><div class="small">${c.src==='depot'?'Collect '+esc(c.colPc):esc(c.cust)}<br>${esc(c.pc)} · declared <b>${esc(c.bu)}</b> · ${c.kg}kg${c.src==='cust'?(c.rev?' · '+gbp(c.rev):''):''}</div>${c.src==='cust'&&(!c.rev||c.revEdit)?`<div class="small" style="margin-top:4px">Revenue £ <input type="number" step="any" class="revIn" data-id="${c.id}" value="${c.rev||''}" style="width:80px;padding:3px;font-size:14px;display:inline-block${c.rev?'':';border-color:#b3261e'}">${c.rev?'':' <span class="warn">missing</span>'}</div>`:''}</td>`:''}
+        return `<tr>${i===0?`<td class="info" rowspan="${g.l.length}"><b>${esc(c.con)}</b>${g.l.length>1?` <button class="btn sameAll" data-id="${c.id}" title="Copy lift 1's sizes to every lift" style="padding:2px 8px;font-size:12px;float:right">Same as lift 1</button>`:''}<div class="small">${c.src==='depot'?'Collect '+esc(c.colPc):esc(c.cust)}<br>${esc(c.pc)} · declared <b>${esc(c.bu)}</b> · ${c.kg}kg${c.src==='cust'?(c.rev?' · '+gbp(c.rev):''):''}</div>${c.src==='cust'&&(!c.rev||c.revEdit)?`<div class="small" style="margin-top:4px">Revenue £ <input type="number" step="any" class="revIn" data-id="${c.id}" value="${c.rev||''}" style="width:80px;padding:3px;font-size:14px;display:inline-block${c.rev?'':';border-color:#b3261e'}">${c.rev?'':' <span class="warn">missing</span>'}</div>`:''}</td>`:''}
           <td><b>${x.n}</b></td><td class="small">${x.l}/${c.lifts}</td>
           <td><input class="dim code${ph.code?' ph':''}" type="text" data-n="${x.n}" data-f="code" value="${esc(m.code??'')}" style="width:62px;text-transform:uppercase"></td>
           ${['L','W','H','kg'].map(f=>`<td><input class="dim${ph[f]?' ph':''}" ${sizeDefault(c)&&(f==='L'||f==='W')?`placeholder="${sizeDefault(c)[f]}" title="Default for this customer – type to change"`:''} type="number" inputmode="decimal" step="any" data-n="${x.n}" data-f="${f}" value="${m[f]??''}"></td>`).join('')}
@@ -727,6 +736,13 @@ document.getElementById('v-load').addEventListener('click',e=>{
 });
 document.getElementById('hideZero').addEventListener('change',renderAll);
 document.getElementById('onlyChg').addEventListener('change',applyOnly);
+document.getElementById('check').addEventListener('click',e=>{
+  const b=e.target.closest('.sameAll'); if(!b) return;
+  const g=groupsOf(liftList()).find(g=>g.c.id===b.dataset.id); if(!g) return;
+  const first=state.m[g.l[0].n]; if(!first || !dims(first,g.c)){ b.textContent='Fill lift 1 first'; setTimeout(()=>b.textContent='Same as lift 1',1500); return; }
+  g.l.slice(1).forEach(x=>{ state.m[x.n]=Object.assign({},first); if(state.ph) delete state.ph[x.n]; });
+  save(); renderCheck();
+});
 document.addEventListener('click',e=>{ const b=e.target.closest('.skBtn'); if(b){ e.preventDefault(); openSk(b.dataset.id); } });
 document.getElementById('skClose').addEventListener('click',closeSk);
 document.getElementById('skModal').addEventListener('click',e=>{ if(e.target.id==='skModal') closeSk(); });
@@ -775,7 +791,13 @@ document.getElementById('check').addEventListener('input',e=>{
   const i=e.target; if(i.classList.contains('revIn')||i.classList.contains('newIn')) return;
   if (i.classList.contains('rate')){ const v=parseFloat(i.value); i.parentElement.querySelector('.calc').textContent = v>0?gbp(v*i.dataset.p/100):'–'; return; }
   if(!i.dataset.n) return; const n=i.dataset.n;
-  state.m[n]=state.m[n]||{}; state.m[n][i.dataset.f]= i.dataset.f==='code' ? i.value.trim().toUpperCase() : (parseFloat(i.value)||null);
+  state.m[n]=state.m[n]||{};
+  if (i.dataset.f==='code' && /^(=|SAME)$/i.test(i.value.trim())){
+    const tb=i.closest('tbody'), ns=[...tb.querySelectorAll('input[data-f="code"]')].map(x=>x.dataset.n), k=ns.indexOf(n);
+    if (k>0 && state.m[ns[k-1]]){ state.m[n]=Object.assign({},state.m[ns[k-1]]); delete state.m[n].same; save(); renderCheck(); 
+      const nx=document.querySelector(`#check input[data-n="${ns[k+1]}"][data-f="code"]`); if(nx) nx.focus(); return; }
+  }
+  state.m[n][i.dataset.f]= i.dataset.f==='code' ? i.value.trim().toUpperCase() : (parseFloat(i.value)||null);
   if (state.ph?.[n]) delete state.ph[n][i.dataset.f]; i.classList.remove('ph');
   save(); refreshCon(i.closest('tbody').dataset.id);
 });
@@ -878,9 +900,10 @@ let photoMode='match';
 const num = v => { if (v==null) return 0; const n=parseFloat(String(v).replace(/[^0-9.\-]/g,'')); return isFinite(n)?n:0; };
 document.getElementById('photoStartBtn').addEventListener('click',()=>{ photoMode='sheet'; document.getElementById('photoIn').click(); });
 document.getElementById('photoBtn').addEventListener('click',()=>{ photoMode = state.rows.length ? 'match' : 'sheet'; },true);
-const HAND=`Some L and W boxes have a small pre-printed default (e.g. 200 and 100) – if nothing is hand-written over it, return null for that box. The hand-written boxes are "S / E", L, W, H (cm) and KG. In "S / E" staff write S or E followed by a height, e.g. S70 or E80 (S = standard pallet, E = euro pallet); then L/W/H are usually blank. For oversize pallets they write L, W, H instead. KG is often blank.`;
+const HAND=`On the 2nd and later lifts of a consignment staff may write SAME, a ditto mark (" or 〃) or draw a line down through the boxes to mean \"same as the lift above\" – return \"same\":true for that row and leave its boxes null. Some L and W boxes have a small pre-printed default (e.g. 200 and 100) – if nothing is hand-written over it, return null for that box. The hand-written boxes are "S / E", L, W, H (cm) and KG. In "S / E" staff write S or E followed by a height, e.g. S70 or E80 (S = standard pallet, E = euro pallet); then L/W/H are usually blank. For oversize pallets they write L, W, H instead. KG is often blank.`;
 function applyHand(k,r){
   state.m[k]=state.m[k]||{}; state.ph=state.ph||{}; state.ph[k]=state.ph[k]||{};
+  if (r.same===true || /^(SAME|=|"|〃)$/i.test(String(r.code||'').trim())){ state.m[k]={same:1}; state.ph[k]={code:1}; return; }
   const code=String(r.code||'').trim().toUpperCase().replace(/\s+/g,'');
   if (/^[SE]\d+(\.\d+)?$/.test(code)){ state.m[k].code=code; state.ph[k].code=1; }
   ['L','W','H','kg'].forEach(f=>{ const v=num(r[f]); if(r[f]!=null && v>0){ state.m[k][f]=v; state.ph[k][f]=1; } });
@@ -899,7 +922,7 @@ document.getElementById('photoIn').addEventListener('change',async e=>{
 The printed rows are:
 ${rowsTxt}
 
-Read the hand-written values. Return ONLY JSON: {"rows":[{"row":<row number>,"code":<"S70"-style string|null>,"L":<number|null>,"W":<number|null>,"H":<number|null>,"kg":<number|null>}]}.
+Read the hand-written values. Return ONLY JSON: {"rows":[{"row":<row number>,"code":<"S70"-style string|null>,"same":<true|false>,"L":<number|null>,"W":<number|null>,"H":<number|null>,"kg":<number|null>}]}.
 Include only rows where something is written. Use null for any box that is blank or you cannot read with confidence – do not guess. Match by the printed row number.`,{images:files,modelTier:'complex'});
       let n=0; ((out&&out.rows)||[]).forEach(r=>{ if(valid.has(+r.row)){ applyHand(+r.row,r); n++; } });
       save(); renderCheck();
@@ -912,7 +935,7 @@ A consignment with several lifts prints its details on the first lift row only; 
 ${HAND}
 
 Read EVERY printed row on every page, written on or not. Return ONLY JSON:
-{"rows":[{"row":<number>,"section":"customers"|"depot","con":<string>,"customer":<string>,"delPc":<string>,"declared":<string>,"tag":<"SAT"|"TIMED"|"AM"|null>,"conKg":<number>,"revenue":<number|null>,"lift":<number>,"lifts":<number>,"code":<string|null>,"L":<number|null>,"W":<number|null>,"H":<number|null>,"kg":<number|null>}]}
+{"rows":[{"row":<number>,"section":"customers"|"depot","con":<string>,"customer":<string>,"delPc":<string>,"declared":<string>,"tag":<"SAT"|"TIMED"|"AM"|null>,"conKg":<number>,"revenue":<number|null>,"lift":<number>,"lifts":<number>,"code":<string|null>,"same":<true|false>,"L":<number|null>,"W":<number|null>,"H":<number|null>,"kg":<number|null>}]}
 Give conKg, revenue and the hand-written boxes as plain numbers (no £ sign or units). Copy other printed text exactly. For hand-written boxes use null when blank or not readable with confidence – never guess.`,{images:files,modelTier:'complex'});
       const rows=((out&&out.rows)||[]).filter(r=>r.con && r.declared).sort((a,b)=>(+a.row)-(+b.row));
       if (!rows.length) throw {code:'empty'};
