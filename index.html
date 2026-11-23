@@ -438,7 +438,8 @@ function groupsOf(L){ const g=[]; L.forEach(x=>{ const p=g[g.length-1]; if(p&&p.
 // A lift's sizes: either a shorthand (S70 = standard 120x120 base, 70 high; E80 = euro 120x80, 80 high) or full L/W/H.
 // Blank weight falls back to the booked weight (con kg split across its lifts).
 // Customers whose pallets are always the same footprint: printed on the sheet and used unless overwritten.
-const SIZE_DEFAULTS=[{match:'DOORCO', L:200, W:100}];
+// noSurcharge: their agreed prices already allow for oversize, so never apply the SK oversize/overweight %.
+const SIZE_DEFAULTS=[{match:'DOORCO', L:200, W:100, noSurcharge:true}];
 function sizeDefault(c){ if(!c||c.src!=='cust') return null; const n=(c.cust||'').toUpperCase(); return SIZE_DEFAULTS.find(d=>n.includes(d.match))||null; }
 function dims(m,c){
   const dd=sizeDefault(c); if(dd && m && !m.code && m.H>0) m=Object.assign({}, m, {L:m.L>0?m.L:dd.L, W:m.W>0?m.W:dd.W});
@@ -466,7 +467,7 @@ function analyseCon(c,lifts){
   let status = buStr(declared)===buStr(should)?'ok' : sSp>dSp+1e-9?'up' : sSp<dSp-1e-9?'down':'chg';
   if (lines.some(l=>l.err)) status='up';
   if (partial && status==='down') status='chg';
-  const special = c.src==='depot' ? [] : lines.filter(l=>l.sk && l.sk.pct!==100);
+  const special = (c.src==='depot' || sizeDefault(c)?.noSurcharge) ? [] : lines.filter(l=>l.sk && l.sk.pct!==100);
   if (status==='ok' && special.length) status='chg';
   if (partial && status==='ok') status='part';
   return {c,status,declared,should,lines,partial,special};
