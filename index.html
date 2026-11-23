@@ -723,7 +723,8 @@ async function saveNight(){
   const msg=document.getElementById('nightMsg');
   if (!state.rows.length){ msg.textContent='Nothing to save yet.'; return; }
   const d=new Date(), stamp=d.toISOString().slice(0,10);
-  const data=JSON.stringify({app:'night-check', v:1, saved:d.toISOString(),
+  const meas=[]; groupsOf(liftList()).forEach(g=>g.l.forEach(x=>{ const v=state.m[x.n]; if(v&&Object.values(v).some(q=>q)) meas.push(Object.assign({src:g.c.src, con:g.c.con, lift:x.l}, v)); }));
+  const data=JSON.stringify({app:'night-check', v:2, saved:d.toISOString(), meas,
     state:{rows:state.rows,m:state.m,ph:state.ph||{},ex:state.ex||{},files:state.files||{},filter:state.filter}});
   const filename=`night-check-${stamp}.json`;
   try{
@@ -745,6 +746,20 @@ document.getElementById('loadNight').addEventListener('change',e=>{
     try{
       const o=JSON.parse(rd.result);
       if (o.app!=='night-check' || !o.state || !Array.isArray(o.state.rows)) throw 0;
+      // If tonight's exports are already loaded here, just add the measurements to them (keeps the export's own prices).
+      if (state.rows.length && Array.isArray(o.meas) && o.meas.length){
+        const L=liftList(); let hit=0; const miss=[];
+        state.ph=state.ph||{};
+        o.meas.forEach(r=>{ const x=L.find(x=>x.c.src===r.src && x.c.con.trim().toUpperCase()===String(r.con).trim().toUpperCase() && x.l===r.lift);
+          if(!x){ miss.push(r.con); return; }
+          const v={}; ['code','L','W','H','kg'].forEach(f=>{ if(r[f]!=null&&r[f]!=='') v[f]=r[f]; });
+          state.m[x.n]=v; state.ph[x.n]=Object.fromEntries(Object.keys(v).map(k=>[k,1])); hit++; });
+        if (hit){
+          save(); renderAll();
+          msg.innerHTML=`Added measurements for <b>${hit}</b> lifts to tonight's loaded night.`+(miss.length?` <span class="warn">${miss.length} not found here: ${[...new Set(miss)].slice(0,8).join(', ')}${miss.length>8?'…':''}</span>`:'');
+          document.querySelector('#nav button[data-v="check"]').click(); return;
+        }
+      }
       state = Object.assign({rows:[],m:{},ph:{},ex:{},files:{},filter:DEF_FILTER()}, o.state);
       if (!state.filter || !state.filter.cust) state.filter=DEF_FILTER();
       document.getElementById('hideZero').checked=false;
