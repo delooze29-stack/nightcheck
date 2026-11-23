@@ -327,7 +327,7 @@ function loadCSV(text, name, src){
 /* lift list: numbered rows on the sheet */
 // Oddball jobs (keyed via the Nexus extension) come in on our own account. Leave them out unless they're
 // going to another depot AND have revenue on them.
-function oddAccounts(){ return String(state.oddball??'JS049, PALLETTS').toUpperCase().split(/[,;\s]+/).filter(Boolean); }
+function oddAccounts(){ return String(state.oddball??'JC999, ODDBALL JOBS').toUpperCase().split(/[,;\s]+/).filter(Boolean); }
 function isOddball(c){ const a=oddAccounts(); return c.src==='cust' && (a.includes((c.code||'').toUpperCase()) || a.includes((c.cust||'').toUpperCase())); }
 function oddLeftOut(c){ const ours=(state.filter.cust.depot||'59'); return isOddball(c) && !(c.dep && c.dep!==ours && c.rev>0); }
 function liftList(){
@@ -716,7 +716,7 @@ if (window.claude && window.claude.use){
 document.getElementById('photoBtn').addEventListener('click',()=>document.getElementById('photoIn').click());
 /* ---------- Night file: save / load the whole night as a small .json file ---------- */
 let dlCap=null;
-{ const o=document.getElementById('oddAcc'); o.value=state.oddball??'JS049, PALLETTS';
+{ const o=document.getElementById('oddAcc'); o.value=state.oddball??'JC999, ODDBALL JOBS';
   o.addEventListener('change',()=>{ state.oddball=o.value; save(); renderAll(); }); }
 document.getElementById('newNight').addEventListener('click',()=>{
   const y=document.getElementById('newNightYes'), b=document.getElementById('newNight');
