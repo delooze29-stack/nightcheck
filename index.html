@@ -1,0 +1,822 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Night Check – Pallet Measure</title>
+<style id="pageStyle">@page{size:A4 portrait;margin:8mm}</style>
+<style>
+  :root{--bg:#f4f6f9;--card:#fff;--ink:#1d2433;--muted:#6b7385;--line:#dfe3ea;--navy:#1f3a68;--teal:#2a8fa8;
+    --up:#b3261e;--upbg:#fde2e0;--down:#8a5a00;--downbg:#fff1d6;--ok:#24521a;--okbg:#e9f4e1;--blue:#11506a;--bluebg:#e3f1f7}
+  *{box-sizing:border-box;min-width:0}
+  body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;background:var(--bg);color:var(--ink);font-size:15px}
+  header{background:var(--navy);color:#fff;padding:14px 24px;display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+  header h1{margin:0;font-size:20px;font-weight:600;flex:1}
+  nav{display:flex;gap:4px;flex-wrap:wrap}
+  nav button{border:0;background:rgba(255,255,255,.12);color:#fff;padding:9px 16px;border-radius:6px;cursor:pointer;font:inherit;font-weight:600}
+  nav button.on{background:#fff;color:var(--navy)}
+  main{max-width:1250px;margin:0 auto;padding:20px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:16px;margin-bottom:16px}
+  h2{font-size:15px;margin:0 0 10px;color:var(--navy)}
+  .btn{border:1px solid var(--teal);background:#fff;color:var(--teal);padding:9px 14px;border-radius:6px;cursor:pointer;font:inherit;font-weight:600}
+  .btn.solid{background:var(--teal);color:#fff}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .hint{font-size:13px;color:var(--muted)}
+  table{width:100%;border-collapse:collapse}
+  th{font-size:12px;color:var(--muted);text-align:left;font-weight:600;padding:6px;border-bottom:1px solid var(--line);white-space:nowrap}
+  td{padding:5px 6px;border-bottom:1px solid var(--line);vertical-align:top}
+  input[type=number],input[type=text]{width:100%;padding:7px;border:1px solid var(--line);border-radius:5px;font:inherit;font-size:16px}
+  input.dim{width:78px}
+  textarea{width:100%;min-height:140px;font:14px ui-monospace,Consolas,monospace;padding:8px;border:1px solid var(--line);border-radius:5px}
+  .pill{display:inline-block;padding:3px 8px;border-radius:4px;font-weight:700;font-size:13px;white-space:nowrap}
+  .up{background:var(--upbg);color:var(--up)} .down{background:var(--downbg);color:var(--down)}
+  .ok{background:var(--okbg);color:var(--ok)} .chg{background:var(--bluebg);color:var(--blue)}
+  .small{font-size:12px;color:var(--muted);line-height:1.4}
+  .warn{font-size:12px;color:#9a5b00;font-weight:600}
+  .stats{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+  .stat{background:#fff;border:1px solid var(--line);border-radius:8px;padding:10px 14px;min-width:130px}
+  .stat b{display:block;font-size:24px}
+  .view{display:none}.view.on{display:block}
+  .sumt{width:100%;border-collapse:collapse;font-size:14px}.sumt td{border-bottom:1px solid #ccc;padding:6px;vertical-align:top}.sumt .tk{font-size:20px;width:30px}
+  .modal{position:fixed;inset:0;background:rgba(15,25,45,.55);display:flex;align-items:flex-start;justify-content:center;padding:6vh 12px;z-index:50;overflow:auto}
+  .modal[hidden]{display:none}
+  .mbox{background:#fff;border-radius:10px;max-width:560px;width:100%;padding:18px;box-shadow:0 10px 40px rgba(0,0,0,.3)}
+  .mbox h3{font-size:14px;margin:14px 0 6px;color:var(--navy)}
+  .ex{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px}
+  .ex label{border:1px solid var(--line);border-radius:6px;padding:8px;display:flex;gap:8px;align-items:center;cursor:pointer}
+  .ex label:has(input:checked){border-color:var(--teal);background:#e8f5f8}
+  .calcbox{background:#f4f6f9;border-radius:6px;padding:10px;margin-top:12px;font-size:14px;line-height:1.6}
+  .calcbox .big{font-size:22px;font-weight:800;color:var(--navy)}
+  .ck{width:100%;border-collapse:collapse}
+  .ck tbody{border-top:2px solid #b9c1cc}
+  .ck td{border-bottom:1px solid var(--line);padding:4px 6px}
+  .ck td.info{width:270px;vertical-align:top}.ck td.act{width:330px;background:#fafbfc;border-left:1px solid var(--line)}
+  .ck input.dim{width:70px;padding:6px}
+  .ck input.ph{background:#fff6cc;border-color:#e0c24a}
+  .ck .lt{font-weight:700;white-space:nowrap;font-size:13px}
+  .ck tbody.hide{display:none}
+  .src{border:1px solid var(--line);border-radius:6px;padding:10px 12px;margin-top:10px}.src h3{margin:0 0 8px;font-size:14px}
+  .scroll{overflow-x:auto}
+  .money{white-space:nowrap;text-align:right}
+  /* ---------- compact sheet ---------- */
+  .cs{width:100%;border-collapse:collapse;font-size:11px;color:#000;table-layout:fixed}
+  .cs tr.sec td{border:1px solid #000}
+  .cs th{font-size:10px;color:#000;border:1px solid #000;background:#e9edf2;padding:3px;text-align:center;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .cs td{border:1px solid #999;padding:1px 3px;height:8.6mm;vertical-align:middle;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+  .cs tr.first td{border-top:2px solid #000}
+  .cs tr.sec td{background:#1f3a68;color:#fff;font-weight:700;font-size:10.5px;height:6mm;letter-spacing:.02em;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .cs td.n{text-align:center;font-weight:800;font-size:12px}
+  .cs td.cu{white-space:normal;line-height:1.1;font-size:10px}
+  .cs td.c{font-weight:700;font-size:11px;white-space:normal;word-break:break-all;line-height:1.1}
+  .cs td.m{text-align:center}
+  .cs td.w{background:#fff}
+  .cs .tag2{font-size:10px;line-height:1.05;color:#111;font-weight:600}
+  .cs td.se{background:#f3f6fa;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .cs td.sub{color:#555;font-size:9.5px}
+  .cs tr{break-inside:avoid;page-break-inside:avoid}
+  .cs thead{display:table-header-group}
+  /* ---------- printed sheet ---------- */
+  #sheet{color:#000}
+  .sh-top{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;border-bottom:2px solid #000;padding-bottom:6px;font-size:13px}
+  .sh-top b{font-size:17px}
+  .sh-sign{white-space:nowrap}.sh-sign .line{display:inline-block;min-width:110px;border-bottom:1px solid #000;margin:0 10px 0 4px;text-align:center}
+  .sh-key{font-size:12px;margin:6px 0 10px}
+  .sec-h{font-size:14px;margin:10px 0 6px;padding:4px 8px;background:#1f3a68;color:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .con{border:1.5px solid #000;border-radius:4px;margin-bottom:8px;page-break-inside:avoid;break-inside:avoid}.con.big{page-break-inside:auto;break-inside:auto}.con-h,.lift-r{break-inside:avoid}
+  .con-h{display:flex;align-items:stretch;background:#e9edf2;border-bottom:1px solid #000;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .con-h>div{padding:4px 8px;border-right:1px solid #9aa3ae}
+  .con-no{font-weight:800;font-size:15px;display:flex;align-items:center;width:200px;flex:none;word-break:break-all}
+  .con-cust{flex:1;font-size:12px;line-height:1.35}.con-cust span{color:#333}
+  .con-dec{text-align:center;font-size:11px;width:68px;flex:none}.con-dec.w{width:110px}.con-dec span{display:block;color:#444}.con-dec b{font-size:14px;white-space:nowrap}
+  .tick{font-size:26px;line-height:1;display:flex;align-items:center;border-right:0!important}
+  .lift-r{display:flex;align-items:stretch;border-top:1px solid #bbb;height:40px}
+  .lift-r:first-of-type{border-top:0}
+  .rn{width:40px;font-weight:800;font-size:15px;display:flex;align-items:center;justify-content:center;border-right:1px solid #bbb}
+  .lof{width:78px;font-size:12px;display:flex;align-items:center;padding-left:6px;border-right:1px solid #bbb}
+  .lof small{margin-left:3px;color:#555}
+  .wb,.nb{position:relative;border-right:1px solid #bbb}.wb{width:88px}.nb{flex:1;border-right:0}
+  .wb i,.nb i{position:absolute;top:2px;left:5px;font-size:10px;font-style:normal;color:#666;font-weight:700}
+  @media print{
+    .skBtn{display:none!important}
+    body{background:#fff}
+    header,.noprint,.view:not(#v-sheet){display:none!important}
+    body.ps #v-sheet{display:none!important} body.ps #v-summary{display:block!important}
+    main{padding:0;max-width:none}
+    #v-sheet{display:block!important}
+    .card{border:0;padding:0;margin:0}
+    #sheet tr{page-break-inside:avoid}
+    #sheet thead{display:table-header-group}
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Night Check</h1>
+  <nav id="nav">
+    <button data-v="load" class="on">1. Load</button>
+    <button data-v="sheet">2. Print sheet</button>
+    <button data-v="check">3. Check &amp; change</button>
+    <button data-v="summary">4. Change list</button>
+  </nav>
+</header>
+<main>
+
+<!-- LOAD -->
+<section class="view on" id="v-load">
+  <div class="card">
+    <h2>Load tonight's exports</h2>
+    <p class="hint">Load the Consignment Analysis CSVs from the Palletways Portal. They stay in this browser only. You can load one or both.</p>
+    <div class="src"><h3>Our customers <span class="hint">– check and re-charge</span></h3>
+      <div class="row"><input type="file" class="fileIn" data-src="cust" accept=".csv,text/csv">
+      <label class="hint"><input type="checkbox" id="hideZero"> Hide £0 consignments</label></div>
+      <div id="filters-cust" class="row" style="margin-top:8px"></div><div id="info-cust" class="hint" style="margin-top:6px"></div></div>
+    <div class="src"><h3>Depot collections <span class="hint">– check the keyed pallet type only</span></h3>
+      <div class="row"><input type="file" class="fileIn" data-src="depot" accept=".csv,text/csv"></div>
+      <div id="filters-depot" class="row" style="margin-top:8px"></div><div id="info-depot" class="hint" style="margin-top:6px"></div></div>
+    <div id="loadInfo" class="hint" style="margin-top:10px"></div>
+  </div>
+  <div class="card">
+    <h2>Night file</h2>
+    <p class="hint">Move a night between devices without storing it online. Save it where the work was done (e.g. after reading photos on your phone), then load it on the other copy.</p>
+    <div class="row"><button class="btn solid" id="saveNight">Save night file</button>
+      <button class="btn" id="loadNightBtn">Load night file</button><input type="file" id="loadNight" accept=".json,application/json" style="display:none">
+      <span class="hint" id="nightMsg"></span></div>
+  </div>
+  <div class="card" id="photoStart" style="display:none;border-color:var(--teal)">
+    <h2>Sheet already filled in?</h2>
+    <p class="hint">Skip the exports. Upload a photo of each page of the filled-in sheet and Night Check reads the printed details and the handwriting, then takes you straight to Check &amp; change.</p>
+    <div class="row"><button class="btn solid" id="photoStartBtn">Upload sheet photos</button><span class="hint" id="photoStartMsg"></span></div>
+  </div>
+  <div class="card">
+    <h2>How it works</h2>
+    <ol class="small" style="font-size:14px;line-height:1.6">
+      <li>Load the exports, then print the sheet. There's one numbered row per lift.</li>
+      <li>On the floor, write S or E + height for standard/euro pallets (e.g. S70, E80), or full L, W, H for oversize. Only write kg if it's different to booked.</li>
+      <li>On step 3, type the figures in (S70 / E80, or full L W H for oversize). Press Enter to jump to the next box, or the down arrow to go straight to the same box on the next lift. Leave kg blank to use the booked weight.</li>
+      <li>As each con is filled in, it shows straight away what to change on Palletways and what to charge.</li>
+    </ol>
+    <p class="small"><b>Charging rule:</b> re-key each pallet to what it should be. If the new revenue is higher, leave it. If it's lower, set it back to the original. Oversize and overweight pallets are priced on the SK rate (that pallet's rate card × %).</p>
+  </div>
+</section>
+
+<!-- SHEET -->
+<section class="view" id="v-sheet">
+  <div class="card noprint">
+    <div class="row"><button class="btn solid" id="printBtn">Print sheet</button>
+    <label class="hint">Layout <select id="layout" style="font:inherit;padding:6px"><option value="compact">Compact – A4 portrait, ~30 lifts a page</option><option value="detailed">Detailed – A4 landscape, ~10 lifts a page</option></select></label>
+    <span class="hint" id="pageEst"></span></div>
+    <button class="btn" id="dlSheet" style="display:none;margin-top:8px">Download sheet to print</button>
+    <p class="hint" style="margin:6px 0 0">If Print doesn't open here, use Download sheet, or open the saved night-check.html on your PC.</p>
+  </div>
+  <div class="card" id="sheet"></div>
+</section>
+
+<!-- SUMMARY -->
+<section class="view" id="v-summary">
+  <div class="card noprint"><div class="row" style="justify-content:space-between">
+    <span class="hint">Everything to change on Palletways tonight, in one list. Work down it and tick each one off.</span>
+    <div class="row"><button class="btn" id="saveNight2">Save night file</button><button class="btn" id="copyBtn2">Copy list</button><button class="btn solid" id="printSum">Print list</button></div></div></div>
+  <div class="card" id="summary"></div>
+</section>
+
+<!-- CHECK -->
+<section class="view" id="v-check">
+  <div class="stats" id="stats"></div>
+  <div class="card noprint">
+    <div class="row" style="justify-content:space-between">
+      <div class="row">
+        <button class="btn solid" id="photoBtn" style="display:none">Read photo of sheet</button>
+        <input type="file" id="photoIn" accept="image/*" multiple style="display:none">
+        <span id="photoMsg" class="hint"></span>
+      </div>
+      <div class="row">
+        <label class="hint"><input type="checkbox" id="onlyChg"> Only show cons to change</label>
+        <button class="btn" id="copyBtn">Copy change list</button>
+      </div>
+    </div>
+    <p class="hint" id="photoHelp" style="margin:8px 0 0"></p>
+  </div>
+  <div class="card scroll"><div id="check"></div></div>
+  <div class="card small">
+    <b>Assumptions – check these:</b>
+    <ul>
+      <li>Pallet type rules follow the UK Pallet Spec 2026, the same as the Pallet Keyer.</li>
+      <li>SK oversize %: the longest side is the "front-facing" width/length, and the shorter side is the depth.</li>
+      <li>SK overweight %: up to 1200kg = 100%, 1201–1300 = 135%, 1301–1400 = 170%, 1401–1500 = 195%, over 1500 = POA.</li>
+      <li>If a pallet is both oversize and overweight, the extra percentages are added together. For example, 175% and 135% makes 210%.</li>
+      <li>Oversize price: revenue − ticked extras (tail lift £3, handball £5, AM £20, timed £25, Saturday £45), × the SK %, then the extras go back on. Timed and Saturday are pre-ticked from the service – check them.</li>
+    </ul>
+  </div>
+</section>
+</main>
+<div id="skModal" class="modal" hidden><div class="mbox">
+  <div class="row" style="justify-content:space-between"><h2 style="margin:0" id="skTitle">Oversize price</h2><button class="btn" id="skClose">Close</button></div>
+  <div id="skBody"></div>
+</div></div>
+
+<script>
+{
+/* ================= Pallet spec (UK 2026) ================= */
+const T = {
+  MQP:{name:'Mini Quarter',h:60,kg:150,rank:1}, QP:{name:'Quarter',h:80,kg:250,rank:2},
+  HP:{name:'Half',h:120,kg:500,rank:3}, EPL:{name:'Euro Light',h:220,kg:500,rank:4},
+  LP:{name:'Light',h:220,kg:750,rank:5}, FP:{name:'Full',h:220,kg:1200,rank:6},
+  XL:{name:'Extra Large',h:220,kg:1200,rank:7}
+};
+const ADDON = {1:{FP:'QP',LP:'QP',HP:'QP',QP:'QP',MQP:'MQP'},2:{FP:'HP',LP:'HP',HP:'HP',QP:'QP',MQP:'MQP'},3:{FP:'FP',LP:'LP',HP:'HP',QP:'QP',MQP:'MQP'}};
+const BASES = ['MQP','QP','HP','LP','FP'];
+const SPACE = {MQP:.25,QP:.33,HP:.5,EPL:.67,LP:1,FP:1,XL:1.33}; // only used to judge up/down
+
+function baseType(a,b,H,kg){
+  const euro = a<=80 && b<=120;
+  const order = euro ? ['MQP','QP','HP','EPL','LP','FP'] : BASES;
+  return order.find(k => H<=T[k].h && kg<=T[k].kg) || 'FP';
+}
+function classify(L,W,H,kg){
+  const a=Math.min(L,W), b=Math.max(L,W), r={units:[],warn:[],err:''};
+  if (H>220){ r.err='Over 220cm high'; return r; }
+  const over = Math.max(0,a-120)+Math.max(0,b-120);
+  r.rateType = baseType(Math.min(a,120),Math.min(b,120),H,kg);
+  if (over===0) r.units=[baseType(a,b,H,kg)];
+  else if (over<=40) r.units=['XL'];
+  else if (over<=120){
+    const band = over<=50?1:over<=75?2:3;
+    let pick=null;
+    for (const base of BASES){ if (H>T[base].h) continue; const add=ADDON[band][base];
+      if (kg<=Math.min(1200,T[base].kg+T[add].kg)){ pick=[base,add]; break; } }
+    r.units = pick || ['FP',ADDON[band].FP];
+  } else {
+    const n=Math.ceil(b/120)*Math.ceil(a/120); // weight allowance adds up across the spaces (6 x QP = 1500kg)
+    r.units=Array(n).fill(BASES.find(k=>H<=T[k].h && kg<=n*T[k].kg)||'FP');
+  }
+  if (b>250) r.warn.push('Over 250cm – agree with delivering depot');
+  if (r.units.length>2) r.warn.push('Over 2 spaces – pre-alert');
+  if (kg>1200) r.warn.push('Overweight on Palletways – manifest full weight');
+  return r;
+}
+
+/* ================= SK Distribution oversize/overweight % ================= */
+const OS_COLS = [120,180,210,240,300,330,360,420,450,480,540,570,600];
+const OS_D120 = [100,175,185,195,270,280,290,365,375,385,460,470,480];
+const OS_D240 = [195,365,375,385,520,530,540,695];
+function skPct(L,W,kg){
+  const front=Math.ceil(Math.max(L,W)), depth=Math.ceil(Math.min(L,W)), notes=[];
+  let os=null;
+  const ci = OS_COLS.findIndex(c => front<=c);
+  if (ci<0 || depth>240) { os='POA'; }
+  else if (depth<=120) os=OS_D120[ci];
+  else os = OS_D240[ci] ?? 'POA';
+  if (depth>120 && front>400) notes.push('Over network max 240×400');
+  let ow = kg<=1200?100 : kg<=1300?135 : kg<=1400?170 : kg<=1500?195 : 'POA';
+  if (os==='POA'||ow==='POA') return {pct:'POA',os,ow,notes};
+  return {pct: os + (ow-100), os, ow, notes};
+}
+
+/* ================= State ================= */
+const DEF_FILTER = () => ({cust:{depot:'59',statuses:['NOT BARCODED','AT COLLECTION DEPOT']}, depot:{depot:'59',statuses:['REQUESTED','IN MY DEPOT']}});
+let state = {rows:[], m:{}, files:{}, filter:DEF_FILTER()};
+try { const s = JSON.parse(localStorage.getItem('nightcheck2')||'null'); if (s && s.rows && s.filter && s.filter.cust) state = s; } catch(e){}
+const save = () => { try{ localStorage.setItem('nightcheck2', JSON.stringify(state)); }catch(e){} };
+const SRC_NAME = {cust:'Our customers', depot:'Depot collections'};
+
+function parseCSV(text){
+  const out=[]; let row=[], f='', q=false;
+  for (let i=0;i<text.length;i++){
+    const c=text[i];
+    if (q){ if (c==='"'){ if (text[i+1]==='"'){f+='"';i++;} else q=false; } else f+=c; }
+    else if (c==='"') q=true;
+    else if (c===','){ row.push(f); f=''; }
+    else if (c==='\n'||c==='\r'){ if (c==='\r'&&text[i+1]==='\n') i++; row.push(f); f=''; if (row.some(x=>x.trim()!=='')) out.push(row); row=[]; }
+    else f+=c;
+  }
+  if (f!==''||row.length){ row.push(f); if (row.some(x=>x.trim()!=='')) out.push(row); }
+  return out;
+}
+function parseBU(s){ // "EPL-3,LP-2" -> {EPL:3,LP:2}
+  const o={}; (s||'').split(/[,;]/).forEach(p=>{ const m=p.trim().toUpperCase().match(/^([A-Z]+)\s*-\s*(\d+)$/); if (m){ const k=ALIAS[m[1]]||m[1]; o[k]=(o[k]||0)+ +m[2]; } });
+  return o;
+}
+const ALIAS = {XLP:'XL', ELP:'EPL'};
+const code = k => k==='XL' ? 'XLP' : k;
+const buStr = o => Object.keys(o).sort((a,b)=>T[b]?.rank-T[a]?.rank).map(k=>`${code(k)}-${o[k]}`).join(', ') || '–';
+const esc = s => String(s??'').replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const gbp = n => '£'+(+n).toFixed(2);
+
+function loadCSV(text, name, src){
+  const rows = parseCSV(text); const head = rows.shift().map(h=>h.trim().toLowerCase());
+  const col = (...ks) => { for (const k of ks){ const i=head.indexOf(k); if(i>=0) return i; } return -1; };
+  const ix = {con:col('con no'),cust:col('customer name','customer'),code:head.indexOf('customer name')>=0?col('customer'):-1,
+    bu:col('billing units'),pc:col('del postcode'),colPc:col('col postcode'),rev:col('revenue (gbp)','revenue'),
+    lifts:col('lifts'),kg:col('weight (kg)','weight'),dep:col('delivery depot'),colDep:col('collecting depot'),
+    status:col('status'),svc:col('del service'),due:col('due date'),hub:col('hub')};
+  if (ix.con<0||ix.bu<0||ix.lifts<0) { alert('That doesn’t look like a Consignment Analysis CSV.'); return; }
+  const g = (r,k) => ix[k]>=0 ? (r[ix[k]]||'').trim() : '';
+  const fresh = rows.map((r,i)=>({id:src+i, src, con:g(r,'con'), cust:g(r,'cust'), code:g(r,'code'), bu:g(r,'bu'),
+    pc:g(r,'pc').toUpperCase(), colPc:g(r,'colPc').toUpperCase(), rev:parseFloat(g(r,'rev'))||0,
+    lifts:Math.max(1,parseInt(g(r,'lifts'))||1), kg:parseFloat(g(r,'kg'))||0, dep:g(r,'dep'), colDep:g(r,'colDep'),
+    status:g(r,'status').toUpperCase(), svc:g(r,'svc'), due:g(r,'due'), hub:g(r,'hub')}));
+  state.rows = state.rows.filter(r=>r.src!==src).concat(fresh);
+  state.files[src]=name; state.m={};
+  save(); renderAll();
+}
+
+/* lift list: numbered rows on the sheet */
+function liftList(){
+  const hide = document.getElementById('hideZero').checked;
+  const out=[]; let n=1;
+  ['cust','depot'].forEach(src=>{
+    const f = state.filter[src];
+    state.rows.filter(c => c.src===src
+      && !(src==='cust' && hide && !c.rev)
+      && !(f.depot && c.colDep && c.colDep !== f.depot)
+      && !(c.status && !f.statuses.includes(c.status)))
+    .sort((a,b)=> (a.ord!=null&&b.ord!=null) ? a.ord-b.ord : src==='cust' ? (a.cust.localeCompare(b.cust) || a.con.localeCompare(b.con)) : (a.colPc.localeCompare(b.colPc) || a.con.localeCompare(b.con)))
+    .forEach(c => { for (let l=1;l<=c.lifts;l++) out.push({n:n++, c, l}); });
+  });
+  return out;
+}
+
+/* ================= Render ================= */
+function renderLoadInfo(){
+  const L=liftList();
+  const el=document.getElementById('loadInfo');
+  if (!state.rows.length){ el.textContent='Nothing loaded yet.'; return; }
+  el.innerHTML = `Sheet will show <b>${new Set(L.map(x=>x.c.id)).size}</b> cons / <b>${L.length}</b> lifts.`;
+  ['cust','depot'].forEach(src=>{
+    const rows=state.rows.filter(r=>r.src===src), sel=L.filter(x=>x.c.src===src);
+    document.getElementById('info-'+src).innerHTML = rows.length
+      ? `Loaded <b>${esc(state.files[src])}</b> (${rows.length} cons) → ${new Set(sel.map(x=>x.c.id)).size} cons / ${sel.length} lifts on the sheet. <a href="#" class="clr" data-src="${src}">Clear</a>`
+      : 'Not loaded.';
+  });
+}
+function renderFilters(){
+  ['cust','depot'].forEach(src=>{
+    const el=document.getElementById('filters-'+src); const rows=state.rows.filter(r=>r.src===src);
+    if (!rows.length || !rows.some(c=>c.status||c.colDep)){ el.innerHTML=''; return; }
+    const f=state.filter[src];
+    const all=[...new Set([...f.statuses, ...rows.map(c=>c.status).filter(Boolean)])].sort();
+    const n=s=>rows.filter(c=>c.status===s && (!f.depot||c.colDep===f.depot)).length;
+    el.innerHTML=`<label class="hint">Collecting depot <input type="text" class="fDepot" value="${esc(f.depot)}" style="width:60px;display:inline-block;padding:4px"></label>
+      <span class="hint">Status:</span>${all.map(s=>`<label class="hint" style="white-space:nowrap"><input type="checkbox" class="fStat" value="${esc(s)}" ${f.statuses.includes(s)?'checked':''}> ${esc(s)} (${n(s)})</label>`).join(' ')}`;
+    el.querySelector('.fDepot').addEventListener('change',e=>{ f.depot=e.target.value.trim(); save(); renderAll(); });
+    el.querySelectorAll('.fStat').forEach(cb=>cb.addEventListener('change',()=>{
+      f.statuses=[...el.querySelectorAll('.fStat:checked')].map(x=>x.value); save(); renderAll(); }));
+  });
+}
+const svcTag = c => { const v=(c.svc||'').toUpperCase(); return v.includes('SATURDAY')?'SAT':v.includes('TIMED')?'TIMED':/\bAM\b/.test(v)?'AM':''; };
+function compactSheet(groups,lifts,d){
+  const cols=`<colgroup><col style="width:7mm"><col style="width:26mm"><col style="width:24mm"><col style="width:17mm"><col style="width:19mm"><col style="width:10mm"><col style="width:13mm"><col style="width:8mm">
+      <col style="width:14mm"><col style="width:12mm"><col style="width:12mm"><col style="width:12mm"><col style="width:12mm"><col style="width:6mm"></colgroup>`;
+  const table = (src, gs) => `<table class="cs" style="margin-top:6px">${cols}
+    <thead><tr class="sec"><td colspan="14">${SRC_NAME[src].toUpperCase()} – ${src==='cust'?'measure and check the charge':'check the pallet type the depot keyed'}</td></tr>
+    <tr><th>Row</th><th>Con No</th><th>${src==='cust'?'Customer':'Collect from'}</th><th>Del PC</th><th>Declared</th><th>Con kg</th><th>£</th><th>Lift</th><th>S / E</th><th>L</th><th>W</th><th>H</th><th>KG</th><th>✔</th></tr></thead><tbody>
+    ${gs.map(g=>g.l.map((x,i)=>{ const c=g.c;
+      const who = c.src==='depot' ? esc(c.colPc) : esc(c.cust);
+      const info = i===0
+        ? `<td class="c">${esc(c.con)}</td><td class="cu">${who}</td><td>${esc(c.pc)}</td><td class="m"><b>${esc(c.bu)}</b>${svcTag(c)?`<div class="tag2">${svcTag(c)}</div>`:''}</td><td class="m">${c.kg}</td><td class="m">${c.src==='cust'?gbp(c.rev).slice(1):'–'}</td>`
+        : `<td></td><td></td><td></td><td></td><td></td><td></td>`;
+      return `<tr class="${i===0?'first':''}"><td class="n">${x.n}</td>${info}<td class="m">${x.l}/${c.lifts}</td><td class="w se"></td><td class="w"></td><td class="w"></td><td class="w"></td><td class="w"></td><td></td></tr>`;
+    }).join('')).join('')}</tbody></table>`;
+  return `<div class="sh-top"><div><b>SK Distribution – Night measure sheet</b><br>
+      <span>Collecting depot ${esc(state.filter.cust.depot||state.filter.depot.depot||'all')} · ${groups.length} cons · ${lifts} lifts · cm / kg</span></div>
+      <div class="sh-sign">Date <span class="line">${d}</span> Measured by <span class="line"></span></div></div>
+    <div class="sh-key">Standard or euro with no overhang: just write <b>S</b> or <b>E</b> + height in the S / E box (e.g. <b>S70</b>, <b>E80</b>). Oversize: write full <b>L, W, H</b>. KG only if different to booked.</div>
+    ${['cust','depot'].map(src=>{ const gs=groups.filter(g=>g.c.src===src); return gs.length?table(src,gs):''; }).join('')}`;
+}
+function renderSheet(){
+  const L=liftList(); const d=new Date().toLocaleDateString('en-GB');
+  if (!L.length){ document.getElementById('sheet').innerHTML='<p class="hint">Nothing to print. Load a CSV, or check the filters on step 1.</p>'; return; }
+  const groups=[]; L.forEach(x=>{ const g=groups[groups.length-1]; if(g&&g.c===x.c) g.l.push(x); else groups.push({c:x.c,l:[x]}); });
+  const lifts=L.length;
+  const compact = (document.getElementById('layout')?.value||'compact')==='compact';
+  document.getElementById('pageStyle').textContent = `@page{size:A4 ${compact?'portrait':'landscape'};margin:8mm}`;
+  document.getElementById('pageEst').textContent = `About ${Math.max(1,Math.ceil(compact? (lifts+2)/29 : (lifts+groups.length*0.9)/11))} page(s) for ${lifts} lifts.`;
+  if (compact){ document.getElementById('sheet').innerHTML = compactSheet(groups,lifts,d); return; }
+  document.getElementById('sheet').innerHTML = `
+    <div class="sh-top"><div><b>SK Distribution – Night measure sheet</b><br>
+      <span>Collecting depot ${esc(state.filter.cust.depot||'all')} · ${groups.length} cons · ${lifts} lifts</span></div>
+      <div class="sh-sign">Date <span class="line">${d}</span> Measured by <span class="line"></span></div></div>
+    <div class="sh-key">Standard or euro with no overhang: write <b>S</b>/<b>E</b> + height (e.g. <b>S70</b>, <b>E80</b>). Oversize: full <b>L, W, H</b> in cm, including overhang. KG only if different to booked. Tick ✔ the con when done.</div>
+    ${groups.map((g,gi)=>{ const c=g.c; return `${(gi===0||groups[gi-1].c.src!==c.src)?`<h3 class="sec-h">${SRC_NAME[c.src]}</h3>`:''}<div class="con${g.l.length>4?' big':''}">
+      <div class="con-h">
+        <div class="con-no">${esc(c.con)}</div>
+        <div class="con-cust"><b>${c.src==='depot'?'Depot collection':esc(c.cust)}</b>${c.code&&c.code!==c.cust?` <span>${esc(c.code)}</span>`:''}<br>
+          <span>${c.colPc?esc(c.colPc)+' → ':''}${esc(c.pc)}${c.dep?' · Depot '+esc(c.dep):''}${c.svc?' · '+esc(c.svc):''}${c.due?' · Due '+esc(c.due):''}</span></div>
+        <div class="con-dec w"><span>Declared</span><b>${esc(c.bu)}</b></div>
+        <div class="con-dec"><span>Lifts</span><b>${c.lifts}</b></div>
+        <div class="con-dec"><span>Con kg</span><b>${c.kg}</b></div>
+        <div class="con-dec"><span>Revenue</span><b>${gbp(c.rev)}</b></div>
+        <div class="tick">☐</div>
+      </div>
+      ${g.l.map(x=>`<div class="lift-r">
+        <div class="rn">${x.n}</div><div class="lof">Lift ${x.l}<small> of ${c.lifts}</small></div>
+        ${['S / E','L','W','H','KG'].map(k=>`<div class="wb"><i>${k}</i></div>`).join('')}
+        <div class="nb"><i>Notes</i></div></div>`).join('')}
+    </div>`;}).join('')}`;
+}
+function groupsOf(L){ const g=[]; L.forEach(x=>{ const p=g[g.length-1]; if(p&&p.c===x.c) p.l.push(x); else g.push({c:x.c,l:[x]}); }); return g; }
+
+// A lift's sizes: either a shorthand (S70 = standard 120x120 base, 70 high; E80 = euro 120x80, 80 high) or full L/W/H.
+// Blank weight falls back to the booked weight (con kg split across its lifts).
+function dims(m,c){
+  if(!m) return null; let L,W,H;
+  const sc=String(m.code||'').trim().match(/^([SE])\s*(\d+(?:\.\d+)?)$/i);
+  if (sc){ L=120; W=sc[1].toUpperCase()==='E'?80:120; H=+sc[2]; }
+  else if (m.L>0&&m.W>0&&m.H>0){ L=m.L; W=m.W; H=m.H; }
+  else return null;
+  const est=!(m.kg>0);
+  return {L,W,H,kg: est ? Math.round(c.kg/c.lifts*10)/10 : m.kg, est, code: sc?sc[1].toUpperCase()+sc[2]:''};
+}
+function analyseCon(c,lifts){
+  const measured = lifts.map(x=>({x, m:dims(state.m[x.n],c)})).filter(o=>o.m);
+  if (!measured.length) return {c,status:'none',lines:[]};
+  const declared=parseBU(c.bu), should={}; const lines=[];
+  measured.forEach(({x,m})=>{
+    const r=classify(m.L,m.W,m.H,m.kg);
+    if (r.err){ lines.push({x,m,err:r.err}); return; }
+    r.units.forEach(u=>should[u]=(should[u]||0)+1);
+    lines.push({x,m,r,sk:skPct(m.L,m.W,m.kg)});
+  });
+  const partial = measured.length<lifts.length;
+  const dSp=Object.entries(declared).reduce((s,[k,n])=>s+(SPACE[k]||0)*n,0);
+  const sSp=Object.entries(should).reduce((s,[k,n])=>s+(SPACE[k]||0)*n,0);
+  let status = buStr(declared)===buStr(should)?'ok' : sSp>dSp+1e-9?'up' : sSp<dSp-1e-9?'down':'chg';
+  if (lines.some(l=>l.err)) status='up';
+  if (partial && status==='down') status='chg';
+  const special = c.src==='depot' ? [] : lines.filter(l=>l.sk && l.sk.pct!==100);
+  if (status==='ok' && special.length) status='chg';
+  if (partial && status==='ok') status='part';
+  return {c,status,declared,should,lines,partial,special};
+}
+
+const LABEL={up:'Under-declared',down:'Over-declared',chg:'Check / surcharge',ok:'Correct',none:'Not measured',part:'Part measured'};
+function actionHtml(r){
+  const c=r.c;
+  if (r.status==='none') return '<span class="hint">Waiting for measurements</span>';
+  if (r.status==='part') return `<span class="pill">${LABEL.part}</span> <span class="hint">so far matches ${esc(c.bu)}</span>`;
+  if (c.src==='depot') return r.status==='ok' ? '<span class="pill ok">Correct</span>'
+    : `<span class="pill chg">Keyed wrong</span><div style="margin-top:4px">Change <b>${esc(c.bu)}</b> → <b>${buStr(r.should)}</b>${r.partial?' <span class="warn">+ unmeasured</span>':''}<br><span class="small">Depot collection – no revenue check.</span></div>`;
+  if (r.status==='ok') return '<span class="pill ok">Correct</span>';
+  const skDone = r.special.length ? skCharge(r) : null;
+  const rule = skDone&&skDone.total!=null ? `Set the charge to <b>${gbp(Math.max(skDone.total,c.rev))}</b>`
+    : r.status==='down' ? `Keep the charge at <b>${gbp(c.rev)}</b>`
+    : `Re-price. If it comes out under <b>${gbp(c.rev)}</b>, set it back to ${gbp(c.rev)}`;
+  const chg = buStr(r.declared)===buStr(r.should) ? '' : `Change <b>${esc(c.bu)}</b> → <b>${buStr(r.should)}</b>${r.partial?' <span class="warn">+ unmeasured</span>':''}<br>`;
+  const skc = r.special.length ? skCharge(r) : null;
+  const sk = r.special.length ? `<div class="small" style="margin-top:6px">${r.special.map(l=>`Row ${l.x.n}: SK <b>${l.sk.pct==='POA'?'POA':l.sk.pct+'%'}</b> (${skParts(l)})${l.sk.notes.length?` <span class="warn">${l.sk.notes.join('; ')}</span>`:''}`).join('<br>')}</div>
+    ${skc&&skc.total!=null ? `<div style="margin-top:4px">Oversize charge: <b>${gbp(Math.max(skc.total,c.rev))}</b> <button class="btn skBtn" data-id="${c.id}" style="padding:3px 8px;font-size:13px">Edit</button></div>`
+      : skc&&skc.poa ? '<div class="warn">POA – price by hand</div>'
+      : `<button class="btn solid skBtn" data-id="${c.id}" style="margin-top:6px;padding:5px 10px;font-size:13px">Work out oversize price</button>`}` : '';
+  return `<span class="pill ${r.status}">${LABEL[r.status]}</span><div style="margin-top:4px">${chg}${rule}</div>${sk}${(()=>{ const ex=extraRev(r); const needs = !(r.special.length&&skCharge(r)&&skCharge(r).total!=null) && r.status!=='down';
+    return (needs?`<div class="small" style="margin-top:6px">${newRevInput(c)}</div>`:'') + (ex!=null&&ex!==undefined?`<div style="margin-top:4px">Extra revenue: <b style="color:var(--ok)">${gbp(ex)}</b></div>`:''); })()}`;
+}
+/* ---- SK oversize/overweight price: take the extras off, apply the %, put the extras back ---- */
+const EXTRAS=[['tl','Tail lift',3],['hb','Handball',5],['am','AM',20],['timed','Timed',25],['sat','Saturday',45]];
+const skParts = l => [l.sk.os!==100?`oversize ${l.sk.os}%`:'', l.sk.ow!==100?`overweight ${l.sk.ow}%`:''].filter(Boolean).join(' + ');
+function guessExtras(c){ const sv=(c.svc||'').toUpperCase(); return {timed:/TIMED/.test(sv), sat:/SATURDAY/.test(sv), am:/\bAM\b/.test(sv)}; }
+function extrasTotal(f){ return EXTRAS.reduce((t,[k,,v])=>t+(f[k]?v:0),0); }
+function skCharge(r){
+  const e=state.ex?.[r.c.id]; if(!e) return null;
+  if (r.special.some(l=>l.sk.pct==='POA')) return {poa:true};
+  let add=0;
+  for (const l of r.special){ const p=e.prices?.[l.x.n]; if(!(p>0)) return null; add += p*(l.sk.pct-100)/100; }
+  return {total: Math.round((r.c.rev+add)*100)/100, extras: extrasTotal(e.flags||{})};
+}
+// Extra revenue made by a change. null = not a revenue con; undefined = needs the new price typing in.
+function extraRev(r){
+  const c=r.c; if (c.src!=='cust' || !['up','down','chg'].includes(r.status)) return null;
+  const k = r.special&&r.special.length ? skCharge(r) : null;
+  if (k&&k.total!=null) return Math.max(k.total,c.rev)-c.rev;
+  if (r.status==='down') return 0;
+  if (c.newRev>0) return Math.max(c.newRev,c.rev)-c.rev;
+  return undefined;
+}
+function newRevInput(c){ return `New price £ <input type="number" step="any" class="newIn" data-id="${c.id}" value="${c.newRev||''}" style="width:80px;padding:3px;font-size:14px;display:inline-block">`; }
+function conResult(id){ const g=groupsOf(liftList()).find(g=>g.c.id===id); return g?analyseCon(g.c,g.l):null; }
+
+function openSk(id){
+  const r=conResult(id); if(!r) return; const c=r.c;
+  state.ex=state.ex||{};
+  const e = state.ex[id] ? JSON.parse(JSON.stringify(state.ex[id])) : {flags:guessExtras(c), prices:{}, edited:{}};
+  const body=document.getElementById('skBody');
+  document.getElementById('skTitle').textContent = `Oversize price – ${c.con}`;
+  const draw=()=>{
+    const ext=extrasTotal(e.flags), base=Math.max(0,c.rev-ext), per=Math.round(base/c.lifts*100)/100;
+    r.special.forEach(l=>{ if(!e.edited[l.x.n]) e.prices[l.x.n]=per; });
+    let add=0, ok=true;
+    const lines=r.special.map(l=>{ const pct=l.sk.pct, p=e.prices[l.x.n];
+      if (pct==='POA'){ ok=false; return `<div>Row ${l.x.n}: <b>POA</b> – price this one by hand.</div>`; }
+      const up=(p||0)*(pct-100)/100; add+=up;
+      return `<div style="margin-top:6px">Row ${l.x.n} (${skParts(l)}) – pallet price £
+        <input type="number" step="any" class="skp" data-n="${l.x.n}" value="${p??''}" style="width:85px;padding:4px;display:inline-block;font-size:15px">
+        × <b>${pct}%</b> = <b>${gbp((p||0)*pct/100)}</b> <span class="hint">(+${gbp(up)})</span></div>`; }).join('');
+    const total=c.rev+add, final=Math.max(total,c.rev);
+    body.innerHTML=`
+      <p class="small" style="margin:8px 0 0">${esc(c.cust)} · ${esc(c.pc)} · declared ${esc(c.bu)} · ${c.lifts} lift(s) · ${esc(c.svc||'')}</p>
+      <h3>What's ticked on the consignment?</h3>
+      <div class="ex">${EXTRAS.map(([k,t,v])=>`<label><input type="checkbox" data-k="${k}" ${e.flags[k]?'checked':''}> ${t} <span class="hint">£${v}</span></label>`).join('')}</div>
+      <div class="calcbox">
+        Revenue now <b>${gbp(c.rev)}</b> − extras <b>${gbp(ext)}</b> = <b>${gbp(base)}</b> before extras${c.lifts>1?` <span class="hint">(${gbp(per)} a lift – change below if that pallet's price is different)</span>`:''}
+        ${lines}
+        <div style="margin-top:8px">+ extras back on <b>${gbp(ext)}</b></div>
+        <div style="margin-top:6px">New consignment charge: <span class="big">${ok?gbp(final):'POA'}</span>${ok&&total<c.rev?' <span class="hint">(kept at the original – it was higher)</span>':''}</div>
+      </div>
+      <div class="row" style="margin-top:12px;justify-content:flex-end"><button class="btn" id="skReset">Reset</button><button class="btn solid" id="skSave">Use this price</button></div>`;
+    body.querySelectorAll('input[data-k]').forEach(cb=>cb.onchange=()=>{ e.flags[cb.dataset.k]=cb.checked; draw(); });
+    body.querySelectorAll('.skp').forEach(inp=>inp.onchange=()=>{ e.prices[inp.dataset.n]=parseFloat(inp.value)||0; e.edited[inp.dataset.n]=1; draw(); });
+    document.getElementById('skReset').onclick=()=>{ e.flags=guessExtras(c); e.prices={}; e.edited={}; draw(); };
+    document.getElementById('skSave').onclick=()=>{ state.ex[id]=e; save(); closeSk(); refreshCon(id); renderSummary(); };
+  };
+  draw(); document.getElementById('skModal').hidden=false;
+}
+function closeSk(){ document.getElementById('skModal').hidden=true; }
+
+function liftType(c,x){
+  const m=dims(state.m[x.n],c); if(!m) return '';
+  const r=classify(m.L,m.W,m.H,m.kg);
+  return r.err ? `<span class="warn">${r.err}</span>` : r.units.map(code).join('+') + (m.est?`<div class="small" style="font-weight:400">${m.kg}kg as booked</div>`:'') + (r.warn.length?`<div class="warn" style="font-weight:400">${r.warn.join('; ')}</div>`:'');
+}
+
+function renderCheck(){
+  const L=liftList(), G=groupsOf(L);
+  const el=document.getElementById('check');
+  if (!G.length){ el.innerHTML='<p class="hint">Load an export on step 1 first.</p>'; renderStats([]); return; }
+  let prevSrc=null;
+  el.innerHTML = `<table class="ck"><thead><tr><th>Con</th><th>Row</th><th>Lift</th><th>S / E</th><th>L cm</th><th>W cm</th><th>H cm</th><th>kg</th><th>Lift is</th><th>What to do on Palletways</th></tr></thead>
+    ${G.map(g=>{ const c=g.c, r=analyseCon(c,g.l);
+      const head = c.src!==prevSrc ? `<tbody><tr><td colspan="10" style="background:#1f3a68;color:#fff;font-weight:700">${SRC_NAME[c.src]}</td></tr></tbody>` : ''; prevSrc=c.src;
+      return head + `<tbody data-id="${c.id}" data-st="${r.status}">` + g.l.map((x,i)=>{ const m=state.m[x.n]||{}, ph=state.ph?.[x.n]||{};
+        return `<tr>${i===0?`<td class="info" rowspan="${g.l.length}"><b>${esc(c.con)}</b><div class="small">${c.src==='depot'?'Collect '+esc(c.colPc):esc(c.cust)}<br>${esc(c.pc)} · declared <b>${esc(c.bu)}</b> · ${c.kg}kg${c.src==='cust'?(c.rev?' · '+gbp(c.rev):''):''}</div>${c.src==='cust'&&(!c.rev||c.revEdit)?`<div class="small" style="margin-top:4px">Revenue £ <input type="number" step="any" class="revIn" data-id="${c.id}" value="${c.rev||''}" style="width:80px;padding:3px;font-size:14px;display:inline-block${c.rev?'':';border-color:#b3261e'}">${c.rev?'':' <span class="warn">missing</span>'}</div>`:''}</td>`:''}
+          <td><b>${x.n}</b></td><td class="small">${x.l}/${c.lifts}</td>
+          <td><input class="dim code${ph.code?' ph':''}" type="text" data-n="${x.n}" data-f="code" value="${esc(m.code??'')}" style="width:62px;text-transform:uppercase"></td>
+          ${['L','W','H','kg'].map(f=>`<td><input class="dim${ph[f]?' ph':''}" type="number" inputmode="decimal" step="any" data-n="${x.n}" data-f="${f}" value="${m[f]??''}"></td>`).join('')}
+          <td class="lt" data-lt="${x.n}">${liftType(c,x)}</td>
+          ${i===0?`<td class="act" rowspan="${g.l.length}">${actionHtml(r)}</td>`:''}</tr>`;}).join('') + '</tbody>';
+    }).join('')}</table>`;
+  applyOnly(); renderStats(G);
+}
+function refreshCon(id){
+  const G=groupsOf(liftList()); const g=G.find(g=>g.c.id===id); if(!g) return;
+  const tb=document.querySelector(`#check tbody[data-id="${id}"]`); const r=analyseCon(g.c,g.l);
+  tb.dataset.st=r.status; tb.querySelector('.act').innerHTML=actionHtml(r);
+  g.l.forEach(x=>{ const cell=tb.querySelector(`[data-lt="${x.n}"]`); if(cell) cell.innerHTML=liftType(g.c,x); });
+  renderStats(G);
+}
+function renderStats(G){
+  const res=G.map(g=>analyseCon(g.c,g.l)); window._res=res;
+  const cnt=f=>res.filter(f).length;
+  const items=[['up','Under-declared',r=>r.c.src==='cust'&&r.status==='up'],['down','Over-declared',r=>r.c.src==='cust'&&r.status==='down'],
+    ['chg','Surcharge / check',r=>r.c.src==='cust'&&r.status==='chg'],['chg','Depot cols keyed wrong',r=>r.c.src==='depot'&&['up','down','chg'].includes(r.status)],
+    ['ok','Correct',r=>r.status==='ok'],['','Still to measure',r=>r.status==='none'||r.status==='part']];
+  document.getElementById('stats').innerHTML=items.map(([k,t,f])=>`<div class="stat"><span class="pill ${k}">${t}</span><b>${cnt(f)}</b></div>`).join('');
+}
+function applyOnly(){
+  const only=document.getElementById('onlyChg').checked;
+  document.querySelectorAll('#check tbody[data-id]').forEach(tb=>tb.classList.toggle('hide', only && !['up','down','chg'].includes(tb.dataset.st)));
+}
+
+function renderSummary(){
+  const G=groupsOf(liftList()), res=G.map(g=>analyseCon(g.c,g.l));
+  const el=document.getElementById('summary');
+  if (!G.length){ el.innerHTML='<p class="hint">Load an export on step 1 first.</p>'; return; }
+  const todo=r=>['up','down','chg'].includes(r.status);
+  const cust=res.filter(r=>r.c.src==='cust'&&todo(r)), dep=res.filter(r=>r.c.src==='depot'&&todo(r));
+  const left=res.filter(r=>r.status==='none'||r.status==='part'), ok=res.filter(r=>r.status==='ok');
+  const sk=r=>{ if(!r.special.length) return ''; const k=skCharge(r);
+    return r.special.map(l=>`<div>Row ${l.x.n}: <b>${l.sk.pct==='POA'?'POA':l.sk.pct+'%'}</b></div>`).join('')
+      + (k&&k.total!=null ? '' : k&&k.poa ? '<div class="warn">POA</div>' : `<div class="warn noprint-btn"><button class="btn skBtn" data-id="${r.c.id}" style="padding:3px 8px;font-size:12px">Work out price</button></div>`); };
+  const charge=r=>{ const k=r.special.length?skCharge(r):null;
+    if (k&&k.total!=null) return `Set to <b>${gbp(Math.max(k.total,r.c.rev))}</b><div class="small">oversize price</div>`;
+    return r.status==='down' ? `Keep at <b>${gbp(r.c.rev)}</b>` : `Re-price, min <b>${gbp(r.c.rev)}</b>`; };
+  const chg=r=> buStr(r.declared)===buStr(r.should) ? '<span class="hint">type OK</span>' : `${esc(r.c.bu)} → <b>${buStr(r.should)}</b>${r.partial?' <span class="warn">+ unmeasured</span>':''}`;
+  el.innerHTML = `
+    <div class="sh-top" style="margin-bottom:10px"><div><b>Night Check – change list</b><br><span>${new Date().toLocaleDateString('en-GB')} · ${G.length} cons checked</span></div>
+      <div class="sh-sign">Keyed by <span class="line"></span></div></div>
+    ${(()=>{ const ex=cust.map(extraRev); window._extra={total:ex.filter(v=>v>0).reduce((a,b)=>a+b,0), missing:ex.filter(v=>v===undefined).length}; return ''; })()}
+    <div class="stats"><div class="stat"><span class="pill ok">Extra revenue tonight</span><b>${gbp(window._extra.total)}</b>${window._extra.missing?`<div class="small">${window._extra.missing} still need a new price</div>`:''}</div>${[['up','Customer cons to change',cust.length],['chg','Depot cols keyed wrong',dep.length],['ok','Correct',ok.length],['','Still to measure',left.length]]
+      .map(([k,t,n])=>`<div class="stat"><span class="pill ${k}">${t}</span><b>${n}</b></div>`).join('')}</div>
+    <h2>Our customers</h2>
+    ${cust.length?`<table class="sumt"><thead><tr><th>✔</th><th>Con No</th><th>Customer</th><th>Status</th><th>Pallet type</th><th>Charge</th><th>SK surcharge</th><th>New price</th><th class="money">Extra £</th></tr></thead><tbody>
+      ${cust.map(r=>`<tr><td class="tk">☐</td><td><b>${esc(r.c.con)}</b></td><td>${esc(r.c.cust)}<div class="small">${esc(r.c.pc)}</div></td>
+        <td><span class="pill ${r.status}">${LABEL[r.status]}</span></td><td>${chg(r)}</td><td>${charge(r)}</td><td class="small">${sk(r)||'–'}</td>${(()=>{ const ex=extraRev(r), k=r.special.length?skCharge(r):null;
+          const np = k&&k.total!=null ? gbp(Math.max(k.total,r.c.rev)) : r.status==='down' ? gbp(r.c.rev) : newRevInput(r.c).replace('New price £ ','£ ');
+          return `<td>${np}</td><td class="money"><b>${ex===undefined?'<span class="hint">–</span>':gbp(ex)}</b></td>`; })()}</tr>`).join('')}
+      <tr><td colspan="8" style="text-align:right"><b>Extra revenue tonight</b>${window._extra.missing?` <span class="hint">(${window._extra.missing} con(s) still need a new price)</span>`:''}</td><td class="money"><b style="font-size:16px">${gbp(window._extra.total)}</b></td></tr></tbody></table>`
+      :'<p class="hint">Nothing to change.</p>'}
+    <h2 style="margin-top:16px">Depot collections</h2>
+    ${dep.length?`<table class="sumt"><thead><tr><th>✔</th><th>Con No</th><th>Collect from</th><th>Keyed</th><th>Should be</th></tr></thead><tbody>
+      ${dep.map(r=>`<tr><td class="tk">☐</td><td><b>${esc(r.c.con)}</b></td><td>${esc(r.c.colPc)} → ${esc(r.c.pc)}</td><td>${esc(r.c.bu)}</td><td><b>${buStr(r.should)}</b>${r.partial?' <span class="warn">+ unmeasured</span>':''}</td></tr>`).join('')}</tbody></table>`
+      :'<p class="hint">All keyed correctly.</p>'}
+    ${left.length?`<h2 style="margin-top:16px">Still to measure</h2><p class="small">${left.map(r=>esc(r.c.con)+(r.status==='part'?' (part)':'')).join(' · ')}</p>`:''}`;
+  window._sum={cust,dep};
+}
+
+function renderAll(){ renderFilters(); renderLoadInfo(); renderSheet(); renderCheck(); renderSummary(); }
+
+/* ================= Events ================= */
+document.getElementById('nav').addEventListener('click',e=>{
+  const b=e.target.closest('button'); if(!b) return;
+  document.querySelectorAll('#nav button').forEach(x=>x.classList.toggle('on',x===b));
+  document.querySelectorAll('.view').forEach(v=>v.classList.toggle('on',v.id==='v-'+b.dataset.v));
+  if (b.dataset.v==='check') renderCheck();
+  if (b.dataset.v==='summary') renderSummary();
+});
+document.querySelectorAll('.fileIn').forEach(inp=>inp.addEventListener('change',e=>{
+  const f=e.target.files[0]; if(!f) return; const rd=new FileReader();
+  rd.onload=()=>loadCSV(rd.result,f.name,inp.dataset.src); rd.readAsText(f);
+}));
+document.getElementById('v-load').addEventListener('click',e=>{
+  const a=e.target.closest('.clr'); if(!a) return; e.preventDefault();
+  state.rows=state.rows.filter(r=>r.src!==a.dataset.src); state.m={}; save(); renderAll();
+});
+document.getElementById('hideZero').addEventListener('change',renderAll);
+document.getElementById('onlyChg').addEventListener('change',applyOnly);
+document.addEventListener('click',e=>{ const b=e.target.closest('.skBtn'); if(b){ e.preventDefault(); openSk(b.dataset.id); } });
+document.getElementById('skClose').addEventListener('click',closeSk);
+document.getElementById('skModal').addEventListener('click',e=>{ if(e.target.id==='skModal') closeSk(); });
+document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeSk(); });
+document.getElementById('check').addEventListener('keydown',e=>{
+  if ((e.key==='ArrowDown'||e.key==='ArrowUp') && e.target.dataset.n){
+    // move to the same box on the next / previous lift (instead of nudging the number)
+    e.preventDefault();
+    const col=[...document.querySelectorAll(`#check tbody:not(.hide) input.dim[data-f="${e.target.dataset.f}"]`)];
+    const k=col.indexOf(e.target)+(e.key==='ArrowDown'?1:-1);
+    if (col[k]){ col[k].focus(); col[k].select(); }
+    return;
+  }
+  if (e.key!=='Enter' || !e.target.dataset.n) return; e.preventDefault();
+  const all=[...document.querySelectorAll('#check tbody:not(.hide) input.dim')]; const i=all.indexOf(e.target);
+  let j=i+1; if (e.target.dataset.f==='code' && /^[SE]\s*\d/i.test(e.target.value)) j=i+4;
+  if (all[j]){ all[j].focus(); all[j].select(); }
+});
+document.getElementById('copyBtn2').addEventListener('click',()=>document.getElementById('copyBtn').click());
+document.getElementById('printSum').addEventListener('click',()=>{
+  const ps=document.getElementById('pageStyle'), old=ps.textContent;
+  ps.textContent='@page{size:A4 portrait;margin:10mm}'; document.body.classList.add('ps');
+  try{ window.print(); }catch(e){}
+  setTimeout(()=>{ document.body.classList.remove('ps'); ps.textContent=old; },500);
+});
+document.getElementById('layout').addEventListener('change',renderSheet);
+document.getElementById('printBtn').addEventListener('click',()=>{ try{ window.print(); }catch(e){} });
+document.addEventListener('change',e=>{
+  const i=e.target; if(!i.classList||!i.classList.contains('newIn')) return;
+  const c=state.rows.find(r=>r.id===i.dataset.id); if(!c) return;
+  c.newRev=parseFloat(i.value)||0; save();
+  setTimeout(()=>{ refreshCon(c.id); renderSummary(); },0);
+});
+document.getElementById('check').addEventListener('change',e=>{
+  const i=e.target; if(!i.classList.contains('revIn')) return;
+  const c=state.rows.find(r=>r.id===i.dataset.id); if(!c) return;
+  c.rev=parseFloat(i.value)||0; c.revEdit=true; save(); setTimeout(()=>{ renderCheck(); renderSummary(); },0);
+});
+document.getElementById('check').addEventListener('input',e=>{
+  const i=e.target; if(i.classList.contains('revIn')||i.classList.contains('newIn')) return;
+  if (i.classList.contains('rate')){ const v=parseFloat(i.value); i.parentElement.querySelector('.calc').textContent = v>0?gbp(v*i.dataset.p/100):'–'; return; }
+  if(!i.dataset.n) return; const n=i.dataset.n;
+  state.m[n]=state.m[n]||{}; state.m[n][i.dataset.f]= i.dataset.f==='code' ? i.value.trim().toUpperCase() : (parseFloat(i.value)||null);
+  if (state.ph?.[n]) delete state.ph[n][i.dataset.f]; i.classList.remove('ph');
+  save(); refreshCon(i.closest('tbody').dataset.id);
+});
+document.getElementById('copyBtn').addEventListener('click',async()=>{
+  const txt=(window._res||[]).filter(r=>['up','down','chg'].includes(r.status)).map(r=>
+    `${r.c.con}\t${r.c.src==='depot'?'Depot col':r.c.cust}\t${(()=>{const v=extraRev(r);return v==null||v===undefined?'':'extra '+gbp(v);})()}\t${r.c.src==='depot'?'Keyed wrong':LABEL[r.status]}\t${r.c.bu} -> ${buStr(r.should||{})}\t${r.c.src==='depot'?'no revenue check':(()=>{const k=r.special&&r.special.length?skCharge(r):null; return k&&k.total!=null?'set '+gbp(Math.max(k.total,r.c.rev)):r.status==='down'?'keep '+gbp(r.c.rev):'min '+gbp(r.c.rev);})()}`).join('\n');
+  try{ await navigator.clipboard.writeText(txt); document.getElementById('copyBtn').textContent='Copied'; setTimeout(()=>document.getElementById('copyBtn').textContent='Copy change list',1500);}catch(e){}
+});
+
+/* ---------- Reading a photo of the sheet (published page only: uses Claude) ---------- */
+let sampleFn=null;
+if (window.claude && window.claude.use){
+  window.claude.use('sample').then(async sm=>{
+    if(!sm) return;
+    try{ const lim=await sm.limits(); if(!lim || !lim.images) return; }catch(e){ return; }
+    sampleFn=sm;
+    document.getElementById('photoBtn').style.display='';
+    document.getElementById('photoStart').style.display='';
+    document.getElementById('photoHelp').textContent='Take a clear, straight-on photo of each page in good light. Figures read from a photo show in yellow – glance over them before you trust the result. Blank weights use the booked weight.';
+  }).catch(()=>{});
+  window.claude.use('downloads').then(dl=>{
+    if(!dl) return; dlCap=dl; const b=document.getElementById('dlSheet'); b.style.display='';
+    b.onclick=async()=>{
+      const css=[...document.querySelectorAll('style')].map(s=>s.textContent).join('\n');
+      const html=`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Night measure sheet</title><style>${css}\n#sheet{display:block}</style></head><body><div id="sheet">${document.getElementById('sheet').innerHTML}</div><script>window.onload=()=>window.print()<\/script></body></html>`;
+      try{ await dl.save({filename:'night-measure-sheet.html', data:html}); }catch(e){ document.getElementById('pageEst').textContent='Download was cancelled or not allowed.'; }
+    };
+  }).catch(()=>{});
+}
+document.getElementById('photoBtn').addEventListener('click',()=>document.getElementById('photoIn').click());
+/* ---------- Night file: save / load the whole night as a small .json file ---------- */
+let dlCap=null;
+async function saveNight(){
+  const msg=document.getElementById('nightMsg');
+  if (!state.rows.length){ msg.textContent='Nothing to save yet.'; return; }
+  const d=new Date(), stamp=d.toISOString().slice(0,10);
+  const data=JSON.stringify({app:'night-check', v:1, saved:d.toISOString(),
+    state:{rows:state.rows,m:state.m,ph:state.ph||{},ex:state.ex||{},files:state.files||{},filter:state.filter}});
+  const filename=`night-check-${stamp}.json`;
+  try{
+    if (dlCap){ await dlCap.save({filename, data}); }
+    else {
+      const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([data],{type:'application/json'}));
+      a.download=filename; document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },1000);
+    }
+    msg.textContent=`Saved ${filename} – ${state.rows.length} cons.`;
+  }catch(e){ msg.textContent='Save was cancelled or not allowed.'; }
+}
+document.getElementById('saveNight').addEventListener('click',saveNight);
+document.getElementById('saveNight2').addEventListener('click',()=>{ saveNight(); });
+document.getElementById('loadNightBtn').addEventListener('click',()=>document.getElementById('loadNight').click());
+document.getElementById('loadNight').addEventListener('change',e=>{
+  const f=e.target.files[0]; e.target.value=''; if(!f) return;
+  const msg=document.getElementById('nightMsg'); const rd=new FileReader();
+  rd.onload=()=>{
+    try{
+      const o=JSON.parse(rd.result);
+      if (o.app!=='night-check' || !o.state || !Array.isArray(o.state.rows)) throw 0;
+      state = Object.assign({rows:[],m:{},ph:{},ex:{},files:{},filter:DEF_FILTER()}, o.state);
+      if (!state.filter || !state.filter.cust) state.filter=DEF_FILTER();
+      document.getElementById('hideZero').checked=false;
+      save(); renderAll();
+      msg.textContent=`Loaded night saved ${new Date(o.saved).toLocaleString('en-GB')} – ${state.rows.length} cons.`;
+      document.querySelector('#nav button[data-v="check"]').click();
+    }catch(err){ msg.textContent='That isn’t a Night Check file.'; }
+  };
+  rd.readAsText(f);
+});
+
+let photoMode='match';
+const num = v => { if (v==null) return 0; const n=parseFloat(String(v).replace(/[^0-9.\-]/g,'')); return isFinite(n)?n:0; };
+document.getElementById('photoStartBtn').addEventListener('click',()=>{ photoMode='sheet'; document.getElementById('photoIn').click(); });
+document.getElementById('photoBtn').addEventListener('click',()=>{ photoMode = state.rows.length ? 'match' : 'sheet'; },true);
+const HAND=`The hand-written boxes are "S / E", L, W, H (cm) and KG. In "S / E" staff write S or E followed by a height, e.g. S70 or E80 (S = standard pallet, E = euro pallet); then L/W/H are usually blank. For oversize pallets they write L, W, H instead. KG is often blank.`;
+function applyHand(k,r){
+  state.m[k]=state.m[k]||{}; state.ph=state.ph||{}; state.ph[k]=state.ph[k]||{};
+  const code=String(r.code||'').trim().toUpperCase().replace(/\s+/g,'');
+  if (/^[SE]\d+(\.\d+)?$/.test(code)){ state.m[k].code=code; state.ph[k].code=1; }
+  ['L','W','H','kg'].forEach(f=>{ const v=num(r[f]); if(r[f]!=null && v>0){ state.m[k][f]=v; state.ph[k][f]=1; } });
+}
+document.getElementById('photoIn').addEventListener('change',async e=>{
+  const files=[...e.target.files]; e.target.value=''; if(!files.length||!sampleFn) return;
+  const sheetMode = photoMode==='sheet';
+  const msg=document.getElementById(sheetMode?'photoStartMsg':'photoMsg');
+  const btns=[document.getElementById('photoBtn'),document.getElementById('photoStartBtn')];
+  btns.forEach(b=>b.disabled=true); msg.textContent=`Reading ${files.length} photo(s)… this can take a minute.`;
+  try{
+    if (!sheetMode){
+      const L=liftList(); const valid=new Set(L.map(x=>x.n));
+      const rowsTxt=L.map(x=>`${x.n} | ${x.c.con} | lift ${x.l}/${x.c.lifts} | declared ${x.c.bu}`).join('\n');
+      const out=await sampleFn.json(`These are photos of a hand-filled pallet measuring sheet. Each printed row starts with a bold row number. ${HAND}
+The printed rows are:
+${rowsTxt}
+
+Read the hand-written values. Return ONLY JSON: {"rows":[{"row":<row number>,"code":<"S70"-style string|null>,"L":<number|null>,"W":<number|null>,"H":<number|null>,"kg":<number|null>}]}.
+Include only rows where something is written. Use null for any box that is blank or you cannot read with confidence – do not guess. Match by the printed row number.`,{images:files,modelTier:'complex'});
+      let n=0; ((out&&out.rows)||[]).forEach(r=>{ if(valid.has(+r.row)){ applyHand(+r.row,r); n++; } });
+      save(); renderCheck();
+      const left=groupsOf(liftList()).flatMap(g=>g.l.filter(x=>!dims(state.m[x.n],g.c))).length;
+      msg.textContent=`Read ${n} lifts from the photo${left?` – ${left} lift(s) still have no sizes`:''}. Yellow = read from photo.`;
+    } else {
+      const out=await sampleFn.json(`These are photos of the pages of a printed "SK Distribution – Night measure sheet" that staff have filled in by hand.
+The printed table has two sections: "OUR CUSTOMERS" and "DEPOT COLLECTIONS". Printed columns: Row (bold number), Con No, Customer (in Depot collections this column is "Collect from" and holds a postcode), Del PC, Declared (pallet codes such as "QP-1" or "LP-1,HP-1", sometimes with a small tag underneath: SAT, TIMED or AM), Con kg, £ (consignment revenue; "–" in Depot collections), Lift (e.g. "1/2").
+A consignment with several lifts prints its details on the first lift row only; the following rows are blank apart from Row and Lift – they belong to the consignment above, so repeat its details on them.
+${HAND}
+
+Read EVERY printed row on every page, written on or not. Return ONLY JSON:
+{"rows":[{"row":<number>,"section":"customers"|"depot","con":<string>,"customer":<string>,"delPc":<string>,"declared":<string>,"tag":<"SAT"|"TIMED"|"AM"|null>,"conKg":<number>,"revenue":<number|null>,"lift":<number>,"lifts":<number>,"code":<string|null>,"L":<number|null>,"W":<number|null>,"H":<number|null>,"kg":<number|null>}]}
+Give conKg, revenue and the hand-written boxes as plain numbers (no £ sign or units). Copy other printed text exactly. For hand-written boxes use null when blank or not readable with confidence – never guess.`,{images:files,modelTier:'complex'});
+      const rows=((out&&out.rows)||[]).filter(r=>r.con && r.declared).sort((a,b)=>(+a.row)-(+b.row));
+      if (!rows.length) throw {code:'empty'};
+      // one consignment per section+con
+      const cons=new Map();
+      rows.forEach(r=>{ const src=r.section==='depot'?'depot':'cust', key=src+'|'+String(r.con).trim();
+        if(!cons.has(key)) cons.set(key,{id:'ph'+cons.size, src, ord:+r.row, con:String(r.con).trim(),
+          cust: src==='cust'?String(r.customer||''):'', colPc: src==='depot'?String(r.customer||'').toUpperCase():'',
+          pc:String(r.delPc||'').toUpperCase(), bu:String(r.declared||''), kg:num(r.conKg), rev:num(r.revenue),
+          lifts:Math.max(1,num(r.lifts)||1), svc:r.tag==='SAT'?'SATURDAY':r.tag==='TIMED'?'TIMED':r.tag==='AM'?'AM':'',
+          code:'', dep:'', colDep:'', status:'', due:'', hub:''});
+        const c=cons.get(key); c.lifts=Math.max(c.lifts,num(r.lift)||1,num(r.lifts)||1); if(!c.rev&&num(r.revenue)) c.rev=num(r.revenue); if(!c.kg&&num(r.conKg)) c.kg=num(r.conKg); });
+      state.rows=[...cons.values()]; state.files={cust:'photos of the sheet',depot:'photos of the sheet'}; state.m={}; state.ph={}; state.ex={};
+      document.getElementById('hideZero').checked=false;
+      // put the hand-written values on the matching lift
+      const L=liftList(); let n=0;
+      rows.forEach(r=>{ const src=r.section==='depot'?'depot':'cust';
+        const x=L.find(x=>x.c.src===src && x.c.con===String(r.con).trim() && x.l===(num(r.lift)||1));
+        if (x && (r.code||r.L||r.W||r.H||r.kg)){ applyHand(x.n,r); n++; } });
+      save(); renderAll();
+      msg.textContent=`Read ${state.rows.length} cons / ${L.length} lifts from ${files.length} photo(s); ${n} lifts had figures written in.`;
+      document.querySelector('#nav button[data-v="check"]').click();
+      document.getElementById('photoMsg').textContent='Built from the sheet photos. Yellow = hand-written figures read from the photo – check them, and check the printed details look right.';
+    }
+  }catch(err){
+    msg.textContent = err&&err.code==='rate_limited' ? 'Too many photo reads just now – try again in a minute.'
+      : err&&err.code==='empty' ? 'Couldn’t find the sheet in those photos. Try clearer, straight-on shots of each page.'
+      : 'Couldn’t read the photos. Try clearer shots, or type the figures in.';
+  }
+  btns.forEach(b=>b.disabled=false);
+});
+
+renderAll();
+window.__test={classify,skPct,parseBU};
+}
+</script>
+</body>
+</html>
