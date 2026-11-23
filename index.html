@@ -131,13 +131,18 @@
       <div class="row"><input type="file" class="fileIn" data-src="cust" accept=".csv,text/csv">
       <label class="hint"><input type="checkbox" id="hideZero"> Hide £0 consignments</label></div>
       <div id="filters-cust" class="row" style="margin-top:8px"></div>
-      <div class="row" style="margin-top:8px"><label class="hint">Oddball account(s) <input type="text" id="oddAcc" style="width:160px;display:inline-block;padding:4px"></label>
+      <div class="row" style="margin-top:8px"><label class="hint">Oddball account(s) <input type="text" id="oddAcc" style="width:220px;display:inline-block;padding:4px"></label>
         <span class="hint">Left out unless the delivery depot isn't ours and there's a price on it.</span></div>
       <div id="info-cust" class="hint" style="margin-top:6px"></div></div>
     <div class="src"><h3>Depot collections <span class="hint">– check the keyed pallet type only</span></h3>
       <div class="row"><input type="file" class="fileIn" data-src="depot" accept=".csv,text/csv"></div>
       <div id="filters-depot" class="row" style="margin-top:8px"></div><div id="info-depot" class="hint" style="margin-top:6px"></div></div>
     <div id="loadInfo" class="hint" style="margin-top:10px"></div>
+  </div>
+  <div class="card" id="previewCard" style="display:none">
+    <h2>Preview – what goes on tonight's sheet</h2>
+    <p class="hint">Remove any job you don't want on the sheet before printing. Removed jobs are listed underneath so you can put them back.</p>
+    <div class="scroll" id="preview"></div>
   </div>
   <div class="card">
     <h2>Night file</h2>
@@ -277,9 +282,13 @@ function skPct(L,W,kg){
 }
 
 /* ================= State ================= */
-const DEF_FILTER = () => ({cust:{depot:'59',statuses:['NOT BARCODED','AT COLLECTION DEPOT']}, depot:{depot:'59',statuses:['REQUESTED','IN MY DEPOT']}});
+const DEF_FILTER = () => ({cust:{depot:'59',statuses:['AT COLLECTION DEPOT','IN COLLECTION DEPOT','IN MY DEPOT','NOT BARCODED']},
+                           depot:{depot:'59',statuses:['REQUESTED','IN MY DEPOT','ACCEPTED','AWAITING ACCEPTANCE']}});
 let state = {rows:[], m:{}, files:{}, filter:DEF_FILTER()};
 try { const s = JSON.parse(localStorage.getItem('nightcheck2')||'null'); if (s && s.rows && s.filter && s.filter.cust) state = s; } catch(e){}
+state.filter = DEF_FILTER();
+if (state.oddball==='JS049, PALLETTS') delete state.oddball;
+state.removed = state.removed || {};
 const save = () => { try{ localStorage.setItem('nightcheck2', JSON.stringify(state)); }catch(e){} };
 const SRC_NAME = {cust:'Our customers', depot:'Depot collections'};
 
@@ -320,6 +329,7 @@ function loadCSV(text, name, src){
     lifts:Math.max(1,parseInt(g(r,'lifts'))||1), kg:parseFloat(g(r,'kg'))||0, dep:g(r,'dep'), colDep:g(r,'colDep'),
     status:g(r,'status').toUpperCase(), svc:g(r,'svc'), due:g(r,'due'), hub:g(r,'hub')}));
   state.rows = state.rows.filter(r=>r.src!==src).concat(fresh);
+  state.removed = Object.fromEntries(Object.entries(state.removed||{}).filter(([k])=>!k.startsWith(src)));
   state.files[src]=name; state.m={};
   save(); renderAll();
 }
@@ -338,6 +348,7 @@ function liftList(){
     state.rows.filter(c => c.src===src
       && !(src==='cust' && hide && !c.rev)
       && !(src==='cust' && oddLeftOut(c))
+      && !state.removed?.[c.id]
       && !(f.depot && c.colDep && c.colDep !== f.depot)
       && !(c.status && !f.statuses.includes(c.status)))
     .sort((a,b)=> (a.ord!=null&&b.ord!=null) ? a.ord-b.ord : src==='cust' ? (a.cust.localeCompare(b.cust) || a.con.localeCompare(b.con)) : (a.colPc.localeCompare(b.colPc) || a.con.localeCompare(b.con)))
@@ -364,13 +375,8 @@ function renderFilters(){
     const el=document.getElementById('filters-'+src); const rows=state.rows.filter(r=>r.src===src);
     if (!rows.length || !rows.some(c=>c.status||c.colDep)){ el.innerHTML=''; return; }
     const f=state.filter[src];
-    const all=[...new Set([...f.statuses, ...rows.map(c=>c.status).filter(Boolean)])].sort();
     const n=s=>rows.filter(c=>c.status===s && (!f.depot||c.colDep===f.depot)).length;
-    el.innerHTML=`<label class="hint">Collecting depot <input type="text" class="fDepot" value="${esc(f.depot)}" style="width:60px;display:inline-block;padding:4px"></label>
-      <span class="hint">Status:</span>${all.map(s=>`<label class="hint" style="white-space:nowrap"><input type="checkbox" class="fStat" value="${esc(s)}" ${f.statuses.includes(s)?'checked':''}> ${esc(s)} (${n(s)})</label>`).join(' ')}`;
-    el.querySelector('.fDepot').addEventListener('change',e=>{ f.depot=e.target.value.trim(); save(); renderAll(); });
-    el.querySelectorAll('.fStat').forEach(cb=>cb.addEventListener('change',()=>{
-      f.statuses=[...el.querySelectorAll('.fStat:checked')].map(x=>x.value); save(); renderAll(); }));
+    el.innerHTML=`<span class="hint">Collecting depot <b>${esc(f.depot)}</b> · ${f.statuses.map(s=>`${esc(s)} (${n(s)})`).join(' · ')}</span>`;
   });
 }
 const svcTag = c => { const v=(c.svc||'').toUpperCase(); return v.includes('SATURDAY')?'SAT':v.includes('TIMED')?'TIMED':/\bAM\b/.test(v)?'AM':''; };
@@ -621,7 +627,21 @@ function renderSummary(){
   window._sum={cust,dep};
 }
 
-function renderAll(){ renderFilters(); renderLoadInfo(); renderSheet(); renderCheck(); renderSummary(); }
+function renderPreview(){
+  const card=document.getElementById('previewCard'), el=document.getElementById('preview');
+  const G=groupsOf(liftList());
+  const hidden=state.rows.filter(c=>state.removed?.[c.id]);
+  if (!G.length && !hidden.length){ card.style.display='none'; return; }
+  card.style.display='';
+  let prev=null;
+  el.innerHTML=`<table class="ck"><thead><tr><th>Con No</th><th>Customer / collect from</th><th>Del PC</th><th>Declared</th><th>Lifts</th><th>Kg</th><th>£</th><th>Status</th><th></th></tr></thead><tbody>
+    ${G.map(({c})=>{ const sec=c.src!==prev?`<tr><td colspan="9" style="background:#1f3a68;color:#fff;font-weight:700">${SRC_NAME[c.src]}</td></tr>`:''; prev=c.src;
+      return sec+`<tr><td><b>${esc(c.con)}</b></td><td>${c.src==='depot'?esc(c.colPc):esc(c.cust)}</td><td>${esc(c.pc)}</td><td>${esc(c.bu)}</td><td>${c.lifts}</td><td>${c.kg}</td><td>${c.src==='cust'?gbp(c.rev):'–'}</td><td class="small">${esc(c.status)}</td>
+        <td><button class="btn rmJob" data-id="${c.id}" title="Leave this job off the sheet" style="padding:3px 10px">✕</button></td></tr>`; }).join('')}
+    </tbody></table>
+    ${hidden.length?`<p class="small" style="margin-top:10px"><b>Removed:</b> ${hidden.map(c=>`${esc(c.con)} <a href="#" class="putBack" data-id="${c.id}">put back</a>`).join(' · ')}</p>`:''}`;
+}
+function renderAll(){ renderFilters(); renderLoadInfo(); renderPreview(); renderSheet(); renderCheck(); renderSummary(); }
 
 /* ================= Events ================= */
 document.getElementById('nav').addEventListener('click',e=>{
@@ -635,6 +655,14 @@ document.querySelectorAll('.fileIn').forEach(inp=>inp.addEventListener('change',
   const f=e.target.files[0]; if(!f) return; const rd=new FileReader();
   rd.onload=()=>loadCSV(rd.result,f.name,inp.dataset.src); rd.readAsText(f);
 }));
+document.getElementById('preview').addEventListener('click',e=>{
+  const rm=e.target.closest('.rmJob'), pb=e.target.closest('.putBack');
+  if (!rm && !pb) return; if (pb) e.preventDefault();
+  if (Object.values(state.m||{}).some(v=>v&&Object.values(v).some(q=>q))){
+    document.getElementById('preview').insertAdjacentHTML('afterbegin','<p class="warn">Measurements are already in for tonight – removing a job now would move the row numbers. Do this before printing, or press Start a new night.</p>'); return; }
+  if (rm) state.removed[rm.dataset.id]=true; else delete state.removed[pb.dataset.id];
+  save(); renderAll();
+});
 document.getElementById('v-load').addEventListener('click',e=>{
   const a=e.target.closest('.clr'); if(!a) return; e.preventDefault();
   state.rows=state.rows.filter(r=>r.src!==a.dataset.src); state.m={}; save(); renderAll();
@@ -725,7 +753,7 @@ document.getElementById('newNight').addEventListener('click',()=>{
   b.onclick=()=>{ y.style.display='none'; b.textContent='Start a new night'; b.onclick=null; };
 });
 document.getElementById('newNightYes').addEventListener('click',()=>{
-  state={rows:[], m:{}, files:{}, filter:DEF_FILTER(), oddball:state.oddball}; save();
+  state={rows:[], m:{}, files:{}, filter:DEF_FILTER(), oddball:state.oddball, removed:{}}; save();
   document.querySelectorAll('.fileIn').forEach(i=>i.value='');
   document.getElementById('newNightYes').style.display='none'; const b=document.getElementById('newNight'); b.textContent='Start a new night'; b.onclick=null;
   renderAll(); document.getElementById('loadInfo').textContent='Cleared – ready for tonight.';
