@@ -37,10 +37,21 @@
   .stat{background:#fff;border:1px solid var(--line);border-radius:8px;padding:10px 14px;min-width:130px}
   .stat b{display:block;font-size:24px}
   .view{display:none}.view.on{display:block}
-  .sumt tr.dimrow td{border-bottom:1px solid #ccc;padding:0 6px 6px;font-size:12.5px;color:#333}
-  .sumt tr.dimrow span{display:inline-block;margin-right:18px;white-space:nowrap}
-  .sumt tr:has(+ tr.dimrow) td{border-bottom:0}
-  .sumt{width:100%;border-collapse:collapse;font-size:14px}.sumt td{border-bottom:1px solid #ccc;padding:6px;vertical-align:top}.sumt .tk{font-size:20px;width:30px}
+  .sumline{font-size:13px;margin:4px 0 8px;line-height:1.5}
+  .sumt{width:100%;border-collapse:collapse;font-size:13px;table-layout:fixed}
+  .sumt th{padding:3px 4px}
+  .sumt td{padding:3px 4px;vertical-align:top;overflow:hidden;text-overflow:ellipsis}
+  .sumt .tk{font-size:15px;line-height:1}
+  .sumt tr.custh td{background:#e9edf2;font-weight:700;font-size:12px;padding:3px 6px;border-top:1px solid #9aa3ae;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .sumt tr.custh span{font-weight:400;color:#555}
+  .sumt tr.dimrow td{padding:0 4px 4px;font-size:11.5px;color:#333;border-bottom:1px solid #ddd}
+  .sumt tr.dimrow span{display:inline-block;margin-right:14px;white-space:nowrap}
+  .sumt td.st{font-weight:700;font-size:12px;background:none!important}.sumt td.st.up{color:#b3261e}.sumt td.st.down{color:#8a5a00}.sumt td.st.chg{color:#11506a}
+  .sumt td.dims,.sumt div.dims{font-size:11.5px;color:#333}
+  .sumt td.dims span,.sumt div.dims span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .sumt.land tr.c1 td{border-bottom:1px solid #ddd}
+  .sumt tr.tot td{border-top:2px solid #000;padding-top:5px}
+  .sumt input.newIn{width:64px!important;padding:2px!important;font-size:13px!important}
   .modal{position:fixed;inset:0;background:rgba(15,25,45,.55);display:flex;align-items:flex-start;justify-content:center;padding:6vh 12px;z-index:50;overflow:auto}
   .modal[hidden]{display:none}
   .mbox{background:#fff;border-radius:10px;max-width:560px;width:100%;padding:18px;box-shadow:0 10px 40px rgba(0,0,0,.3)}
@@ -104,17 +115,16 @@
   @media print{
     .skBtn{display:none!important}
     body.ps #summary{font-size:12px;color:#000}
-    body.ps #summary .stats{gap:6px;margin-bottom:6px}
-    body.ps #summary .stat{padding:4px 8px;min-width:0}
-    body.ps #summary .stat b{font-size:16px}
-    body.ps .sumt{font-size:11.5px}
-    body.ps .sumt td{padding:4px 5px}
+    body.ps .sumt{font-size:10.5px}
+    body.ps .sumt tr.dimrow td{font-size:9.5px}
+    body.ps .sumt tr.c1{break-after:avoid}
     body.ps .sumt tr{break-inside:avoid}
-    body.ps .sumt tr.dimrow td{font-size:10.5px}
     body.ps .sumt tr:has(+ tr.dimrow){break-after:avoid}
-    body.ps .sumt td:nth-child(5){white-space:nowrap}
     body.ps .sumt thead{display:table-header-group}
-    body.ps .sumt input{border:0;border-bottom:1px solid #000;border-radius:0;background:none;width:70px!important;font-size:12px}
+    body.ps .sumt input{border:0;border-bottom:1px solid #000;border-radius:0;background:none;width:56px!important;height:13px;padding:0!important;font-size:10px!important;line-height:1}
+    body.ps .sumt td{padding:2px 4px}
+    body.ps .sumt tr.dimrow td{padding:0 4px 3px}
+    body.ps .sumt td.dims,body.ps .sumt div.dims{font-size:9.5px}
     body.ps .pill{border:1px solid currentColor;padding:1px 5px}
     body.ps #summary h2{font-size:13px;margin:10px 0 4px}
     body{background:#fff}
@@ -203,7 +213,7 @@
 <section class="view" id="v-summary">
   <div class="card noprint"><div class="row" style="justify-content:space-between">
     <span class="hint">Everything to change on Palletways tonight, in one list. Work down it and tick each one off.</span>
-    <div class="row"><button class="btn" id="saveNight2">Save night file</button><button class="btn" id="copyBtn2">Copy list</button><button class="btn solid" id="printSum">Print list</button></div></div></div>
+    <div class="row"><select class="sumLayout" style="font:inherit;padding:6px"><option value="portrait">Portrait</option><option value="landscape">Landscape</option></select><button class="btn" id="saveNight2">Save night file</button><button class="btn" id="copyBtn2">Copy list</button><button class="btn solid" id="printSum">Print list</button></div></div></div>
   <div class="card" id="summary"></div>
 </section>
 
@@ -218,7 +228,7 @@
         <span id="photoMsg" class="hint"></span>
       </div>
       <div class="row">
-        <button class="btn" id="printChg">Print change list</button>
+        <button class="btn" id="printChg">Print change list</button> <select class="sumLayout" style="font:inherit;padding:6px"><option value="portrait">Portrait</option><option value="landscape">Landscape</option></select>
         <label class="hint"><input type="checkbox" id="onlyChg"> Only show cons to change</label>
         <button class="btn" id="copyBtn">Copy change list</button>
       </div>
@@ -626,39 +636,52 @@ function liftDims(r, cols){
   }).join('');
   return `<tr class="dimrow"><td></td><td colspan="${cols-1}">${t}</td></tr>`;
 }
+let sumLayout='portrait';
+try{ sumLayout=localStorage.getItem('nc-sumLayout')||'portrait'; }catch(e){}
 function renderSummary(){
+  const land = sumLayout==='landscape';
   const G=groupsOf(liftList()), res=G.map(g=>analyseCon(g.c,g.l));
   const el=document.getElementById('summary');
   if (!G.length){ el.innerHTML='<p class="hint">Load an export on step 1 first.</p>'; return; }
   const todo=r=>['up','down','chg'].includes(r.status);
   const cust=res.filter(r=>r.c.src==='cust'&&todo(r)), dep=res.filter(r=>r.c.src==='depot'&&todo(r));
   const left=res.filter(r=>r.status==='none'||r.status==='part'), ok=res.filter(r=>r.status==='ok');
-  const sk=r=>{ if(!r.special.length) return ''; const k=skCharge(r);
-    return r.special.map(l=>`<div>Row ${l.x.n}: <b>${l.sk.pct==='POA'?'POA':l.sk.pct+'%'}</b></div>`).join('')
-      + (k&&k.total!=null ? '' : k&&k.poa ? '<div class="warn">POA</div>' : `<div class="warn noprint-btn"><button class="btn skBtn" data-id="${r.c.id}" style="padding:3px 8px;font-size:12px">Work out price</button></div>`); };
+  const ex=cust.map(extraRev); window._extra={total:ex.filter(v=>v>0).reduce((a,b)=>a+b,0), missing:ex.filter(v=>v===undefined).length};
+  const SHORT={up:'Under',down:'Over',chg:'Check'};
+  const chg=r=> buStr(r.declared)===buStr(r.should) ? '<span class="hint">type OK</span>' : `${esc(r.c.bu)} → <b>${buStr(r.should)}</b>${r.partial?' <span class="warn">+?</span>':''}`;
   const charge=r=>{ const k=r.special.length?skCharge(r):null;
-    if (k&&k.total!=null) return `Set to <b>${gbp(Math.max(k.total,r.c.rev))}</b><div class="small">oversize price</div>`;
-    return r.status==='down' ? `Keep at <b>${gbp(r.c.rev)}</b>` : `Re-price, min <b>${gbp(r.c.rev)}</b>`; };
-  const chg=r=> buStr(r.declared)===buStr(r.should) ? '<span class="hint">type OK</span>' : `${esc(r.c.bu)} → <b>${buStr(r.should)}</b>${r.partial?' <span class="warn">+ unmeasured</span>':''}`;
+    const pct=r.special.length?` <span class="hint">(${r.special.map(l=>l.sk.pct==='POA'?'POA':l.sk.pct+'%').join(', ')})</span>`:'';
+    if (k&&k.total!=null) return `Set <b>${gbp(Math.max(k.total,r.c.rev))}</b>${pct}`;
+    if (k&&k.poa) return `<b>POA</b>${pct}`;
+    if (r.status==='down') return `Keep <b>${gbp(r.c.rev)}</b>`;
+    return `Re-price, min <b>${gbp(r.c.rev)}</b>${pct}${r.special.length?` <button class="btn skBtn" data-id="${r.c.id}" style="padding:2px 6px;font-size:12px">Work out</button>`:''}`; };
+  const newp=r=>{ const k=r.special.length?skCharge(r):null;
+    return k&&k.total!=null ? gbp(Math.max(k.total,r.c.rev)) : r.status==='down' ? gbp(r.c.rev) : newRevInput(r.c).replace('New price £ ','£ '); };
+  const dimLine=r=> r.lines.map(l=> l.err ? `<span class="warn">R${l.x.n}: ${esc(l.err)}</span>`
+    : `<span>R${l.x.n}${r.c.lifts>1?` (${l.x.l}/${r.c.lifts})`:''}: ${l.m.code?esc(l.m.code)+' = ':''}${l.m.L}×${l.m.W}×${l.m.H} · ${l.m.kg}kg${l.m.est?'*':''} → ${l.r.units.map(code).join('+')}</span>`).join('');
+  // group customer cons under one heading per customer
+  const byCust=[]; cust.forEach(r=>{ const g=byCust.find(g=>g.name===r.c.cust); if(g) g.rs.push(r); else byCust.push({name:r.c.cust, rs:[r]}); });
+  byCust.sort((a,b)=>a.name.localeCompare(b.name));
   el.innerHTML = `
-    <div class="sh-top" style="margin-bottom:10px"><div><b>Night Check – change list</b><br><span>${new Date().toLocaleDateString('en-GB')} · ${G.length} cons checked</span></div>
+    <div class="sh-top" style="margin-bottom:6px"><div><b>Night Check – change list</b> <span>${new Date().toLocaleDateString('en-GB')}</span></div>
       <div class="sh-sign">Keyed by <span class="line"></span></div></div>
-    ${(()=>{ const ex=cust.map(extraRev); window._extra={total:ex.filter(v=>v>0).reduce((a,b)=>a+b,0), missing:ex.filter(v=>v===undefined).length}; return ''; })()}
-    <div class="stats"><div class="stat"><span class="pill ok">Extra revenue tonight</span><b>${gbp(window._extra.total)}</b>${window._extra.missing?`<div class="small">${window._extra.missing} still need a new price</div>`:''}</div>${[['up','Customer cons to change',cust.length],['chg','Depot cols keyed wrong',dep.length],['ok','Correct',ok.length],['','Still to measure',left.length]]
-      .map(([k,t,n])=>`<div class="stat"><span class="pill ${k}">${t}</span><b>${n}</b></div>`).join('')}</div>
-    <h2>Our customers</h2>
-    ${cust.length?`<table class="sumt"><thead><tr><th>✔</th><th>Con No</th><th>Customer</th><th>Status</th><th>Pallet type</th><th>Charge</th><th>SK surcharge</th><th>New price</th><th class="money">Extra £</th></tr></thead><tbody>
-      ${cust.map(r=>`<tr><td class="tk">☐</td><td><b>${esc(r.c.con)}</b></td><td>${esc(r.c.cust)}<div class="small">${esc(r.c.pc)}</div></td>
-        <td><span class="pill ${r.status}">${LABEL[r.status]}</span></td><td>${chg(r)}</td><td>${charge(r)}</td><td class="small">${sk(r)||'–'}</td>${(()=>{ const ex=extraRev(r), k=r.special.length?skCharge(r):null;
-          const np = k&&k.total!=null ? gbp(Math.max(k.total,r.c.rev)) : r.status==='down' ? gbp(r.c.rev) : newRevInput(r.c).replace('New price £ ','£ ');
-          return `<td>${np}</td><td class="money"><b>${ex===undefined?'<span class="hint">–</span>':gbp(ex)}</b></td>`; })()}</tr>${liftDims(r,9)}`).join('')}
-      <tr><td colspan="8" style="text-align:right"><b>Extra revenue tonight</b>${window._extra.missing?` <span class="hint">(${window._extra.missing} con(s) still need a new price)</span>`:''}</td><td class="money"><b style="font-size:16px">${gbp(window._extra.total)}</b></td></tr></tbody></table>`
-      :'<p class="hint">Nothing to change.</p>'}
-    <h2 style="margin-top:16px">Depot collections</h2>
-    ${dep.length?`<table class="sumt"><thead><tr><th>✔</th><th>Con No</th><th>Collect from</th><th>Keyed</th><th>Should be</th></tr></thead><tbody>
-      ${dep.map(r=>`<tr><td class="tk">☐</td><td><b>${esc(r.c.con)}</b></td><td>${esc(r.c.colPc)} → ${esc(r.c.pc)}</td><td>${esc(r.c.bu)}</td><td><b>${buStr(r.should)}</b>${r.partial?' <span class="warn">+ unmeasured</span>':''}</td></tr>${liftDims(r,5)}`).join('')}</tbody></table>`
-      :'<p class="hint">All keyed correctly.</p>'}
-    ${left.length?`<h2 style="margin-top:16px">Still to measure</h2><p class="small">${left.map(r=>esc(r.c.con)+(r.status==='part'?' (part)':'')).join(' · ')}</p>`:''}`;
+    <div class="sumline"><b>Extra revenue ${gbp(window._extra.total)}</b>${window._extra.missing?` <span class="hint">(${window._extra.missing} need a new price)</span>`:''}
+      · To change <b>${cust.length}</b> · Depot cols wrong <b>${dep.length}</b> · Correct <b>${ok.length}</b> · Still to measure <b>${left.length}</b> · ${G.length} cons checked</div>
+    ${cust.length?`<table class="sumt${land?' land':''}"><colgroup>${land
+        ? '<col style="width:20px"><col style="width:12%"><col style="width:7%"><col style="width:5%"><col style="width:15%"><col><col style="width:16%"><col style="width:8%"><col style="width:6%">'
+        : '<col style="width:24px"><col style="width:16%"><col style="width:9%"><col style="width:8%"><col><col><col style="width:11%"><col style="width:9%">'}</colgroup>
+      <thead><tr><th>✔</th><th>Con No</th><th>Del PC</th><th></th><th>Pallet type</th>${land?'<th>Measured</th>':''}<th>Charge</th><th>New £</th><th class="money">Extra £</th></tr></thead><tbody>
+      ${byCust.map(g=>`<tr class="custh"><td colspan="${land?9:8}">${esc(g.name)}${g.rs.length>1?` <span>(${g.rs.length})</span>`:''}</td></tr>`+g.rs.map(r=>{ const e=extraRev(r);
+        return `<tr class="c1"><td class="tk">☐</td><td><b>${esc(r.c.con)}</b></td><td>${esc(r.c.pc)}</td><td class="st ${r.status}">${SHORT[r.status]}</td><td>${chg(r)}</td>${land?`<td class="dims">${dimLine(r)}</td>`:''}<td>${charge(r)}</td><td>${newp(r)}</td><td class="money"><b>${e===undefined?'–':gbp(e)}</b></td></tr>
+          ${land?'':`<tr class="dimrow"><td></td><td colspan="7">${dimLine(r)}</td></tr>`}`; }).join('')).join('')}
+      <tr class="tot"><td colspan="${land?8:7}" style="text-align:right"><b>Extra revenue tonight</b></td><td class="money"><b>${gbp(window._extra.total)}</b></td></tr></tbody></table>`
+      :'<p class="hint">No customer cons to change.</p>'}
+    ${dep.length?`<table class="sumt" style="margin-top:8px"><colgroup><col style="width:24px"><col style="width:16%"><col style="width:22%"><col style="width:14%"><col></colgroup>
+      <thead><tr class="custh"><td colspan="5">DEPOT COLLECTIONS – keyed wrong</td></tr><tr><th>✔</th><th>Con No</th><th>Collect → Del</th><th>Keyed</th><th>Should be</th></tr></thead><tbody>
+      ${dep.map(r=>`<tr class="c1"><td class="tk">☐</td><td><b>${esc(r.c.con)}</b></td><td>${esc(r.c.colPc)} → ${esc(r.c.pc)}</td><td>${esc(r.c.bu)}</td><td><b>${buStr(r.should)}</b>${r.partial?' <span class="warn">+?</span>':''}${land?`<div class="dims">${dimLine(r)}</div>`:''}</td></tr>
+        ${land?'':`<tr class="dimrow"><td></td><td colspan="4">${dimLine(r)}</td></tr>`}`).join('')}</tbody></table>`:''}
+    ${left.length?`<p class="small" style="margin-top:8px"><b>Still to measure:</b> ${left.map(r=>esc(r.c.con)+(r.status==='part'?' (part)':'')).join(' · ')}</p>`:''}
+    <p class="small" style="margin-top:4px">* kg as booked · +? = some lifts not measured</p>`;
   window._sum={cust,dep};
 }
 
@@ -726,11 +749,14 @@ document.getElementById('copyBtn2').addEventListener('click',()=>document.getEle
 function printSummary(){
   renderSummary();
   const ps=document.getElementById('pageStyle'), old=ps.textContent;
-  ps.textContent='@page{size:A4 portrait;margin:10mm}'; document.body.classList.add('ps');
+  ps.textContent=`@page{size:A4 ${sumLayout};margin:${sumLayout==='landscape'?'8mm':'10mm'}}`; document.body.classList.add('ps');
   try{ window.print(); }catch(e){}
   setTimeout(()=>{ document.body.classList.remove('ps'); ps.textContent=old; },500);
 }
 document.getElementById('printSum').addEventListener('click',printSummary);
+document.querySelectorAll('.sumLayout').forEach(sel=>{ sel.value=sumLayout; sel.addEventListener('change',()=>{
+  sumLayout=sel.value; try{ localStorage.setItem('nc-sumLayout',sumLayout); }catch(e){}
+  document.querySelectorAll('.sumLayout').forEach(o=>o.value=sumLayout); renderSummary(); }); });
 document.getElementById('printChg').addEventListener('click',printSummary);
 document.getElementById('layout').addEventListener('change',renderSheet);
 document.getElementById('printBtn').addEventListener('click',()=>{ try{ window.print(); }catch(e){} });
