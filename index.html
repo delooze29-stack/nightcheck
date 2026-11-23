@@ -52,6 +52,7 @@
   .ck td{border-bottom:1px solid var(--line);padding:4px 6px}
   .ck td.info{width:270px;vertical-align:top}.ck td.act{width:330px;background:#fafbfc;border-left:1px solid var(--line)}
   .ck input.dim{width:70px;padding:6px}
+  .ck input.dim::placeholder{color:#1f3a68;opacity:.55;font-weight:600}
   .ck input.ph{background:#fff6cc;border-color:#e0c24a}
   .ck .lt{font-weight:700;white-space:nowrap;font-size:13px}
   .ck tbody.hide{display:none}
@@ -71,6 +72,7 @@
   .cs td.m{text-align:center}
   .cs td.w{background:#fff}
   .cs .tag2{font-size:10px;line-height:1.05;color:#111;font-weight:600}
+  .cs .pre{color:#666;font-size:10px}
   .cs td.se{background:#f3f6fa;-webkit-print-color-adjust:exact;print-color-adjust:exact}
   .cs td.sub{color:#555;font-size:9.5px}
   .cs tr{break-inside:avoid;page-break-inside:avoid}
@@ -391,7 +393,8 @@ function compactSheet(groups,lifts,d){
       const info = i===0
         ? `<td class="c">${esc(c.con)}</td><td class="cu">${who}</td><td>${esc(c.pc)}</td><td class="m"><b>${esc(c.bu)}</b>${svcTag(c)?`<div class="tag2">${svcTag(c)}</div>`:''}</td><td class="m">${c.kg}</td><td class="m">${c.src==='cust'?gbp(c.rev).slice(1):'–'}</td>`
         : `<td></td><td></td><td></td><td></td><td></td><td></td>`;
-      return `<tr class="${i===0?'first':''}"><td class="n">${x.n}</td>${info}<td class="m">${x.l}/${c.lifts}</td><td class="w se"></td><td class="w"></td><td class="w"></td><td class="w"></td><td class="w"></td><td></td></tr>`;
+      const dd=sizeDefault(c), pre=v=>dd?`<span class="pre">${v}</span>`:'';
+      return `<tr class="${i===0?'first':''}"><td class="n">${x.n}</td>${info}<td class="m">${x.l}/${c.lifts}</td><td class="w se"></td><td class="w">${pre(dd&&dd.L)}</td><td class="w">${pre(dd&&dd.W)}</td><td class="w"></td><td class="w"></td><td></td></tr>`;
     }).join('')).join('')}</tbody></table>`;
   return `<div class="sh-top"><div><b>SK Distribution – Night measure sheet</b><br>
       <span>Collecting depot ${esc(state.filter.cust.depot||state.filter.depot.depot||'all')} · ${groups.length} cons · ${lifts} lifts · cm / kg</span></div>
@@ -426,7 +429,7 @@ function renderSheet(){
       </div>
       ${g.l.map(x=>`<div class="lift-r">
         <div class="rn">${x.n}</div><div class="lof">Lift ${x.l}<small> of ${c.lifts}</small></div>
-        ${['S / E','L','W','H','KG'].map(k=>`<div class="wb"><i>${k}</i></div>`).join('')}
+        ${['S / E','L','W','H','KG'].map(k=>`<div class="wb"><i>${k}</i>${sizeDefault(c)&&(k==='L'||k==='W')?`<span style="position:absolute;bottom:3px;right:6px;color:#666;font-size:11px">${sizeDefault(c)[k]}</span>`:''}</div>`).join('')}
         <div class="nb"><i>Notes</i></div></div>`).join('')}
     </div>`;}).join('')}`;
 }
@@ -434,7 +437,11 @@ function groupsOf(L){ const g=[]; L.forEach(x=>{ const p=g[g.length-1]; if(p&&p.
 
 // A lift's sizes: either a shorthand (S70 = standard 120x120 base, 70 high; E80 = euro 120x80, 80 high) or full L/W/H.
 // Blank weight falls back to the booked weight (con kg split across its lifts).
+// Customers whose pallets are always the same footprint: printed on the sheet and used unless overwritten.
+const SIZE_DEFAULTS=[{match:'DOORCO', L:200, W:100}];
+function sizeDefault(c){ if(!c||c.src!=='cust') return null; const n=(c.cust||'').toUpperCase(); return SIZE_DEFAULTS.find(d=>n.includes(d.match))||null; }
 function dims(m,c){
+  const dd=sizeDefault(c); if(dd && m && !m.code && m.H>0) m=Object.assign({}, m, {L:m.L>0?m.L:dd.L, W:m.W>0?m.W:dd.W});
   if(!m) return null; let L,W,H;
   const sc=String(m.code||'').trim().match(/^([SE])\s*(\d+(?:\.\d+)?)$/i);
   if (sc){ L=120; W=sc[1].toUpperCase()==='E'?80:120; H=+sc[2]; }
@@ -565,7 +572,7 @@ function renderCheck(){
         return `<tr>${i===0?`<td class="info" rowspan="${g.l.length}"><b>${esc(c.con)}</b><div class="small">${c.src==='depot'?'Collect '+esc(c.colPc):esc(c.cust)}<br>${esc(c.pc)} · declared <b>${esc(c.bu)}</b> · ${c.kg}kg${c.src==='cust'?(c.rev?' · '+gbp(c.rev):''):''}</div>${c.src==='cust'&&(!c.rev||c.revEdit)?`<div class="small" style="margin-top:4px">Revenue £ <input type="number" step="any" class="revIn" data-id="${c.id}" value="${c.rev||''}" style="width:80px;padding:3px;font-size:14px;display:inline-block${c.rev?'':';border-color:#b3261e'}">${c.rev?'':' <span class="warn">missing</span>'}</div>`:''}</td>`:''}
           <td><b>${x.n}</b></td><td class="small">${x.l}/${c.lifts}</td>
           <td><input class="dim code${ph.code?' ph':''}" type="text" data-n="${x.n}" data-f="code" value="${esc(m.code??'')}" style="width:62px;text-transform:uppercase"></td>
-          ${['L','W','H','kg'].map(f=>`<td><input class="dim${ph[f]?' ph':''}" type="number" inputmode="decimal" step="any" data-n="${x.n}" data-f="${f}" value="${m[f]??''}"></td>`).join('')}
+          ${['L','W','H','kg'].map(f=>`<td><input class="dim${ph[f]?' ph':''}" ${sizeDefault(c)&&(f==='L'||f==='W')?`placeholder="${sizeDefault(c)[f]}" title="Default for this customer – type to change"`:''} type="number" inputmode="decimal" step="any" data-n="${x.n}" data-f="${f}" value="${m[f]??''}"></td>`).join('')}
           <td class="lt" data-lt="${x.n}">${liftType(c,x)}</td>
           ${i===0?`<td class="act" rowspan="${g.l.length}">${actionHtml(r)}</td>`:''}</tr>`;}).join('') + '</tbody>';
     }).join('')}</table>`;
@@ -814,7 +821,7 @@ let photoMode='match';
 const num = v => { if (v==null) return 0; const n=parseFloat(String(v).replace(/[^0-9.\-]/g,'')); return isFinite(n)?n:0; };
 document.getElementById('photoStartBtn').addEventListener('click',()=>{ photoMode='sheet'; document.getElementById('photoIn').click(); });
 document.getElementById('photoBtn').addEventListener('click',()=>{ photoMode = state.rows.length ? 'match' : 'sheet'; },true);
-const HAND=`The hand-written boxes are "S / E", L, W, H (cm) and KG. In "S / E" staff write S or E followed by a height, e.g. S70 or E80 (S = standard pallet, E = euro pallet); then L/W/H are usually blank. For oversize pallets they write L, W, H instead. KG is often blank.`;
+const HAND=`Some L and W boxes have a small pre-printed default (e.g. 200 and 100) – if nothing is hand-written over it, return null for that box. The hand-written boxes are "S / E", L, W, H (cm) and KG. In "S / E" staff write S or E followed by a height, e.g. S70 or E80 (S = standard pallet, E = euro pallet); then L/W/H are usually blank. For oversize pallets they write L, W, H instead. KG is often blank.`;
 function applyHand(k,r){
   state.m[k]=state.m[k]||{}; state.ph=state.ph||{}; state.ph[k]=state.ph[k]||{};
   const code=String(r.code||'').trim().toUpperCase().replace(/\s+/g,'');
