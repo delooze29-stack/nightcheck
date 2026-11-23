@@ -37,6 +37,9 @@
   .stat{background:#fff;border:1px solid var(--line);border-radius:8px;padding:10px 14px;min-width:130px}
   .stat b{display:block;font-size:24px}
   .view{display:none}.view.on{display:block}
+  .sumt tr.dimrow td{border-bottom:1px solid #ccc;padding:0 6px 6px;font-size:12.5px;color:#333}
+  .sumt tr.dimrow span{display:inline-block;margin-right:18px;white-space:nowrap}
+  .sumt tr:has(+ tr.dimrow) td{border-bottom:0}
   .sumt{width:100%;border-collapse:collapse;font-size:14px}.sumt td{border-bottom:1px solid #ccc;padding:6px;vertical-align:top}.sumt .tk{font-size:20px;width:30px}
   .modal{position:fixed;inset:0;background:rgba(15,25,45,.55);display:flex;align-items:flex-start;justify-content:center;padding:6vh 12px;z-index:50;overflow:auto}
   .modal[hidden]{display:none}
@@ -107,6 +110,8 @@
     body.ps .sumt{font-size:11.5px}
     body.ps .sumt td{padding:4px 5px}
     body.ps .sumt tr{break-inside:avoid}
+    body.ps .sumt tr.dimrow td{font-size:10.5px}
+    body.ps .sumt tr:has(+ tr.dimrow){break-after:avoid}
     body.ps .sumt td:nth-child(5){white-space:nowrap}
     body.ps .sumt thead{display:table-header-group}
     body.ps .sumt input{border:0;border-bottom:1px solid #000;border-radius:0;background:none;width:70px!important;font-size:12px}
@@ -612,6 +617,15 @@ function applyOnly(){
   document.querySelectorAll('#check tbody[data-id]').forEach(tb=>tb.classList.toggle('hide', only && !['up','down','chg'].includes(tb.dataset.st)));
 }
 
+function liftDims(r, cols){
+  if (!r.lines || !r.lines.length) return '';
+  const t = r.lines.map(l=>{
+    if (l.err) return `<span>Row ${l.x.n} · lift ${l.x.l}/${r.c.lifts}: <span class="warn">${esc(l.err)}</span></span>`;
+    const m=l.m, sz=`${m.L} × ${m.W} × ${m.H} cm`;
+    return `<span>Row ${l.x.n} · lift ${l.x.l}/${r.c.lifts}: <b>${m.code?esc(m.code)+' ('+sz+')':sz}</b> · ${m.kg}kg${m.est?' (booked)':''} → <b>${l.r.units.map(code).join('+')}</b></span>`;
+  }).join('');
+  return `<tr class="dimrow"><td></td><td colspan="${cols-1}">${t}</td></tr>`;
+}
 function renderSummary(){
   const G=groupsOf(liftList()), res=G.map(g=>analyseCon(g.c,g.l));
   const el=document.getElementById('summary');
@@ -637,12 +651,12 @@ function renderSummary(){
       ${cust.map(r=>`<tr><td class="tk">☐</td><td><b>${esc(r.c.con)}</b></td><td>${esc(r.c.cust)}<div class="small">${esc(r.c.pc)}</div></td>
         <td><span class="pill ${r.status}">${LABEL[r.status]}</span></td><td>${chg(r)}</td><td>${charge(r)}</td><td class="small">${sk(r)||'–'}</td>${(()=>{ const ex=extraRev(r), k=r.special.length?skCharge(r):null;
           const np = k&&k.total!=null ? gbp(Math.max(k.total,r.c.rev)) : r.status==='down' ? gbp(r.c.rev) : newRevInput(r.c).replace('New price £ ','£ ');
-          return `<td>${np}</td><td class="money"><b>${ex===undefined?'<span class="hint">–</span>':gbp(ex)}</b></td>`; })()}</tr>`).join('')}
+          return `<td>${np}</td><td class="money"><b>${ex===undefined?'<span class="hint">–</span>':gbp(ex)}</b></td>`; })()}</tr>${liftDims(r,9)}`).join('')}
       <tr><td colspan="8" style="text-align:right"><b>Extra revenue tonight</b>${window._extra.missing?` <span class="hint">(${window._extra.missing} con(s) still need a new price)</span>`:''}</td><td class="money"><b style="font-size:16px">${gbp(window._extra.total)}</b></td></tr></tbody></table>`
       :'<p class="hint">Nothing to change.</p>'}
     <h2 style="margin-top:16px">Depot collections</h2>
     ${dep.length?`<table class="sumt"><thead><tr><th>✔</th><th>Con No</th><th>Collect from</th><th>Keyed</th><th>Should be</th></tr></thead><tbody>
-      ${dep.map(r=>`<tr><td class="tk">☐</td><td><b>${esc(r.c.con)}</b></td><td>${esc(r.c.colPc)} → ${esc(r.c.pc)}</td><td>${esc(r.c.bu)}</td><td><b>${buStr(r.should)}</b>${r.partial?' <span class="warn">+ unmeasured</span>':''}</td></tr>`).join('')}</tbody></table>`
+      ${dep.map(r=>`<tr><td class="tk">☐</td><td><b>${esc(r.c.con)}</b></td><td>${esc(r.c.colPc)} → ${esc(r.c.pc)}</td><td>${esc(r.c.bu)}</td><td><b>${buStr(r.should)}</b>${r.partial?' <span class="warn">+ unmeasured</span>':''}</td></tr>${liftDims(r,5)}`).join('')}</tbody></table>`
       :'<p class="hint">All keyed correctly.</p>'}
     ${left.length?`<h2 style="margin-top:16px">Still to measure</h2><p class="small">${left.map(r=>esc(r.c.con)+(r.status==='part'?' (part)':'')).join(' · ')}</p>`:''}`;
   window._sum={cust,dep};
