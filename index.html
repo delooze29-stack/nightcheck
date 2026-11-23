@@ -130,7 +130,10 @@
     <div class="src"><h3>Our customers <span class="hint">– check and re-charge</span></h3>
       <div class="row"><input type="file" class="fileIn" data-src="cust" accept=".csv,text/csv">
       <label class="hint"><input type="checkbox" id="hideZero"> Hide £0 consignments</label></div>
-      <div id="filters-cust" class="row" style="margin-top:8px"></div><div id="info-cust" class="hint" style="margin-top:6px"></div></div>
+      <div id="filters-cust" class="row" style="margin-top:8px"></div>
+      <div class="row" style="margin-top:8px"><label class="hint">Oddball account(s) <input type="text" id="oddAcc" style="width:160px;display:inline-block;padding:4px"></label>
+        <span class="hint">Left out unless the delivery depot isn't ours and there's a price on it.</span></div>
+      <div id="info-cust" class="hint" style="margin-top:6px"></div></div>
     <div class="src"><h3>Depot collections <span class="hint">– check the keyed pallet type only</span></h3>
       <div class="row"><input type="file" class="fileIn" data-src="depot" accept=".csv,text/csv"></div>
       <div id="filters-depot" class="row" style="margin-top:8px"></div><div id="info-depot" class="hint" style="margin-top:6px"></div></div>
@@ -322,6 +325,11 @@ function loadCSV(text, name, src){
 }
 
 /* lift list: numbered rows on the sheet */
+// Oddball jobs (keyed via the Nexus extension) come in on our own account. Leave them out unless they're
+// going to another depot AND have revenue on them.
+function oddAccounts(){ return String(state.oddball??'JS049, PALLETTS').toUpperCase().split(/[,;\s]+/).filter(Boolean); }
+function isOddball(c){ const a=oddAccounts(); return c.src==='cust' && (a.includes((c.code||'').toUpperCase()) || a.includes((c.cust||'').toUpperCase())); }
+function oddLeftOut(c){ const ours=(state.filter.cust.depot||'59'); return isOddball(c) && !(c.dep && c.dep!==ours && c.rev>0); }
 function liftList(){
   const hide = document.getElementById('hideZero').checked;
   const out=[]; let n=1;
@@ -329,6 +337,7 @@ function liftList(){
     const f = state.filter[src];
     state.rows.filter(c => c.src===src
       && !(src==='cust' && hide && !c.rev)
+      && !(src==='cust' && oddLeftOut(c))
       && !(f.depot && c.colDep && c.colDep !== f.depot)
       && !(c.status && !f.statuses.includes(c.status)))
     .sort((a,b)=> (a.ord!=null&&b.ord!=null) ? a.ord-b.ord : src==='cust' ? (a.cust.localeCompare(b.cust) || a.con.localeCompare(b.con)) : (a.colPc.localeCompare(b.colPc) || a.con.localeCompare(b.con)))
@@ -346,7 +355,7 @@ function renderLoadInfo(){
   ['cust','depot'].forEach(src=>{
     const rows=state.rows.filter(r=>r.src===src), sel=L.filter(x=>x.c.src===src);
     document.getElementById('info-'+src).innerHTML = rows.length
-      ? `Loaded <b>${esc(state.files[src])}</b> (${rows.length} cons) → ${new Set(sel.map(x=>x.c.id)).size} cons / ${sel.length} lifts on the sheet. <a href="#" class="clr" data-src="${src}">Clear</a>`
+      ? `Loaded <b>${esc(state.files[src])}</b> (${rows.length} cons) → ${new Set(sel.map(x=>x.c.id)).size} cons / ${sel.length} lifts on the sheet.${src==='cust'?(()=>{const f=state.filter.cust; const n=rows.filter(c=>oddLeftOut(c) && !(f.depot&&c.colDep&&c.colDep!==f.depot) && !(c.status&&!f.statuses.includes(c.status))).length; return n?` ${n} oddball job(s) left out.`:'';})():''} <a href="#" class="clr" data-src="${src}">Clear</a>`
       : 'Not loaded.';
   });
 }
@@ -707,6 +716,8 @@ if (window.claude && window.claude.use){
 document.getElementById('photoBtn').addEventListener('click',()=>document.getElementById('photoIn').click());
 /* ---------- Night file: save / load the whole night as a small .json file ---------- */
 let dlCap=null;
+{ const o=document.getElementById('oddAcc'); o.value=state.oddball??'JS049, PALLETTS';
+  o.addEventListener('change',()=>{ state.oddball=o.value; save(); renderAll(); }); }
 document.getElementById('newNight').addEventListener('click',()=>{
   const y=document.getElementById('newNightYes'), b=document.getElementById('newNight');
   if (!state.rows.length){ return; }
@@ -714,7 +725,7 @@ document.getElementById('newNight').addEventListener('click',()=>{
   b.onclick=()=>{ y.style.display='none'; b.textContent='Start a new night'; b.onclick=null; };
 });
 document.getElementById('newNightYes').addEventListener('click',()=>{
-  state={rows:[], m:{}, files:{}, filter:DEF_FILTER()}; save();
+  state={rows:[], m:{}, files:{}, filter:DEF_FILTER(), oddball:state.oddball}; save();
   document.querySelectorAll('.fileIn').forEach(i=>i.value='');
   document.getElementById('newNightYes').style.display='none'; const b=document.getElementById('newNight'); b.textContent='Start a new night'; b.onclick=null;
   renderAll(); document.getElementById('loadInfo').textContent='Cleared – ready for tonight.';
