@@ -124,7 +124,8 @@
 <!-- LOAD -->
 <section class="view on" id="v-load">
   <div class="card">
-    <h2>Load tonight's exports</h2>
+    <div class="row" style="justify-content:space-between"><h2 style="margin:0">Load tonight's exports</h2>
+      <span><button class="btn" id="newNight">Start a new night</button> <button class="btn solid" id="newNightYes" style="display:none;background:#b3261e;border-color:#b3261e">Yes – clear everything</button></span></div>
     <p class="hint">Load the Consignment Analysis CSVs from the Palletways Portal. They stay in this browser only. You can load one or both.</p>
     <div class="src"><h3>Our customers <span class="hint">– check and re-charge</span></h3>
       <div class="row"><input type="file" class="fileIn" data-src="cust" accept=".csv,text/csv">
@@ -706,6 +707,18 @@ if (window.claude && window.claude.use){
 document.getElementById('photoBtn').addEventListener('click',()=>document.getElementById('photoIn').click());
 /* ---------- Night file: save / load the whole night as a small .json file ---------- */
 let dlCap=null;
+document.getElementById('newNight').addEventListener('click',()=>{
+  const y=document.getElementById('newNightYes'), b=document.getElementById('newNight');
+  if (!state.rows.length){ return; }
+  y.style.display=''; b.textContent='Cancel';
+  b.onclick=()=>{ y.style.display='none'; b.textContent='Start a new night'; b.onclick=null; };
+});
+document.getElementById('newNightYes').addEventListener('click',()=>{
+  state={rows:[], m:{}, files:{}, filter:DEF_FILTER()}; save();
+  document.querySelectorAll('.fileIn').forEach(i=>i.value='');
+  document.getElementById('newNightYes').style.display='none'; const b=document.getElementById('newNight'); b.textContent='Start a new night'; b.onclick=null;
+  renderAll(); document.getElementById('loadInfo').textContent='Cleared – ready for tonight.';
+});
 async function saveNight(){
   const msg=document.getElementById('nightMsg');
   if (!state.rows.length){ msg.textContent='Nothing to save yet.'; return; }
