@@ -40,7 +40,7 @@
   td.r{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
   tr.tot td{border-top:2px solid var(--ink);border-bottom:0;font-weight:800}
   .pill{display:inline-block;padding:3px 10px;border-radius:999px;background:var(--tint);font-weight:700;font-size:14px}
-  .warn{color:var(--warn);font-size:14px;font-weight:600;margin-top:10px}
+  .warn{color:#b3261e;font-size:15px;font-weight:700;margin-top:6px;padding:8px 10px;border:1px solid currentColor;border-radius:8px}
   .ref{grid-column:1/-1}
   .scroll{overflow-x:auto}
   .ref table{font-size:13px;min-width:560px}
@@ -59,8 +59,8 @@
       <label class="f" for="price">Customer's price for one pallet (£)</label>
       <input type="number" id="price" step="0.01" inputmode="decimal" placeholder="e.g. 85.00">
       <div class="radio">
-        <label><input type="radio" name="inc" value="yes" checked> includes the extras ticked below</label>
-        <label><input type="radio" name="inc" value="no"> before any extras</label>
+        <label><input type="radio" name="inc" value="no" checked> before any extras (base price)</label>
+        <label><input type="radio" name="inc" value="yes"> already includes the extras ticked below</label>
       </div>
     </div>
     <div class="row">
@@ -83,9 +83,9 @@
     <h2>New charge</h2>
     <div class="total" id="total">–</div>
     <div class="sub" id="sub">Enter the price and the pallet's size.</div>
+    <div id="warn" style="margin-bottom:10px"></div>
     <table id="breakdown"></table>
     <div id="key" style="margin-top:14px"></div>
-    <div id="warn"></div>
   </section>
 
   <section class="card ref">
@@ -177,11 +177,17 @@ function calc(){
   drawRef(L&&W?Math.max(L,W):0, L&&W?Math.min(L,W):0);
   if (!(L>0&&W>0)){ $('total').textContent='–'; $('sub').textContent='Enter the price and the pallet’s size.'; $('warn').innerHTML=''; return; }
   const sk=skPct(L,W,kg);
-  if (H>0){ const r=classify(L,W,H,kg||1); if(r.err) warn.push(r.err); else $('key').innerHTML=`Key on Palletways as <span class="pill">${r.units.map(code).join(' + ')}</span>`; r.warn.forEach(w=>warn.push(w)); }
+  if (H>0){ const r=classify(L,W,H,kg||1); if(r.err) warn.push(r.err==='Over 220cm high'?`Height ${H}cm is over the 220cm maximum – can\u2019t go as a standard pallet. Check the height (in cm).`:r.err); else $('key').innerHTML=`Key on Palletways as <span class="pill">${r.units.map(code).join(' + ')}</span>`; r.warn.forEach(w=>warn.push(w)); }
   sk.notes.forEach(n=>warn.push(n));
   if (sk.pct==='POA'){ $('total').textContent='POA'; $('sub').textContent='This size or weight is price on application.'; $('warn').innerHTML=warn.map(w=>`<div class="warn">${w}</div>`).join(''); return; }
   if (!(price>0)){ $('total').textContent=sk.pct+'%'; $('sub').textContent='Enter the customer’s price to see the charge.'; $('warn').innerHTML=warn.map(w=>`<div class="warn">${w}</div>`).join(''); return; }
-  const base = inc ? Math.max(0,price-ext) : price;
+  if (inc && price<=ext){
+    $('total').textContent='–';
+    $('sub').textContent='';
+    warn.unshift(`The price (${gbp(price)}) is less than the extras ticked (${gbp(ext)}), so it can\u2019t include them. If ${gbp(price)} is the pallet\u2019s base price, choose \u201cbefore any extras\u201d.`);
+    $('warn').innerHTML=warn.map(w=>`<div class="warn">${w}</div>`).join(''); return;
+  }
+  const base = inc ? price-ext : price;
   const up = base*sk.pct/100, total = up+ext;
   $('total').textContent=gbp(total);
   $('sub').textContent = sk.pct===100 ? 'Not oversize or overweight – normal price.' : `${sk.pct}% of the pallet price${ext?', extras added back on':''}.`;
