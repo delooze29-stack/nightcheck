@@ -37,6 +37,7 @@
   .stat{background:#fff;border:1px solid var(--line);border-radius:8px;padding:10px 14px;min-width:130px}
   .stat b{display:block;font-size:24px}
   .view{display:none}.view.on{display:block}
+  .privacy{background:#eef7ee;border:1px solid #b9d9b4;color:#24521a;border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:14px;line-height:1.5}
   .drop{display:block;border:2px dashed var(--teal);border-radius:10px;padding:18px;text-align:center;cursor:pointer;background:#f3fafc;margin:6px 0}
   .drop.over{background:#dff1f6}
   .drop input{display:none}
@@ -170,6 +171,12 @@
 
 <!-- LOAD -->
 <section class="view on" id="v-load">
+  <div class="privacy noprint">
+    <b>🔒 Nothing is stored online.</b>
+    The files you load and everything you type stay on <b>this computer, in this browser</b>. Night Check doesn't send them anywhere, and it doesn't need a login.
+    Night files you save are ordinary files on this PC – only send them by internal email.
+    <span id="privacyAI" hidden><br><b>Photo reading</b> (this Claude version only) sends the sheet photos to Claude so it can read the handwriting.</span>
+  </div>
   <div class="card">
     <div class="row" style="justify-content:space-between"><h2 style="margin:0">Load tonight's exports</h2>
       <span><button class="btn" id="newNight">Start a new night</button> <button class="btn solid" id="newNightYes" style="display:none;background:#b3261e;border-color:#b3261e">Yes – clear everything</button></span></div>
@@ -979,6 +986,7 @@ if (window.claude && window.claude.use){
     sampleFn=sm;
     document.getElementById('photoBtn').style.display='';
     document.getElementById('photoStart').style.display='';
+    document.getElementById('privacyAI').hidden=false;
     document.getElementById('photoHelp').textContent='Take a clear, straight-on photo of each page in good light. Figures read from a photo show in yellow – glance over them before you trust the result. Blank weights use the booked weight.';
   }).catch(()=>{});
   window.claude.use('downloads').then(dl=>{
