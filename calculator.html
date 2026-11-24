@@ -56,8 +56,8 @@
   <section class="card">
     <h2>The pallet</h2>
     <div class="row">
-      <label class="f" for="price">Customer's base price for one pallet (£) – before tail lift, timed etc.</label>
-      <input type="number" id="price" step="0.01" inputmode="decimal" placeholder="e.g. 58.00">
+      <label class="f" for="price">Price showing now for the pallet (£) – including anything ticked</label>
+      <input type="number" id="price" step="0.01" inputmode="decimal" placeholder="e.g. 85.00">
     </div>
     <div class="row">
       <label class="f">Size (cm) and weight (kg)</label>
@@ -168,7 +168,7 @@ function calc(){
   const price=parseFloat($('price').value), L=parseFloat($('L').value), W=parseFloat($('W').value), H=parseFloat($('H').value), kg=parseFloat($('kg').value)||0;
   const flags={}; document.querySelectorAll('#extras input').forEach(cb=>flags[cb.dataset.k]=cb.checked);
   const ext=EXTRAS.reduce((t,[k,,v])=>t+(flags[k]?v:0),0);
-  const inc=false; // price entered is always the base price
+  const inc=true; // price entered is what's showing now, extras included
   const warn=[]; $('key').innerHTML=''; $('breakdown').innerHTML='';
   drawRef(L&&W?Math.max(L,W):0, L&&W?Math.min(L,W):0);
   if (!(L>0&&W>0)){ $('total').textContent='–'; $('sub').textContent='Enter the price and the pallet’s size.'; $('warn').innerHTML=''; return; }
@@ -180,21 +180,23 @@ function calc(){
   if (inc && price<=ext){
     $('total').textContent='–';
     $('sub').textContent='';
-    warn.unshift(`The price (${gbp(price)}) is less than the extras ticked (${gbp(ext)}), so it can\u2019t include them. If ${gbp(price)} is the pallet\u2019s base price, choose \u201cbefore any extras\u201d.`);
+    warn.unshift(`The price (${gbp(price)}) is less than the extras ticked (${gbp(ext)}), so it can\u2019t include them. Check the price and what\u2019s ticked.`);
     $('warn').innerHTML=warn.map(w=>`<div class="warn">${w}</div>`).join(''); return;
   }
   const base = inc ? price-ext : price;
   const up = base*sk.pct/100, total = up+ext;
   $('total').textContent=gbp(total);
-  $('sub').textContent = sk.pct===100 ? 'Not oversize or overweight – normal price.' : `${sk.pct}% of the pallet price${ext?', extras added back on':''}.`;
+  $('sub').textContent = sk.pct===100 ? 'Not oversize or overweight – normal price.' : `Extras taken off, ${sk.pct}% applied, extras put back on.`;
   const parts=[sk.os!==100?`oversize ${sk.os}%`:'', sk.ow!==100?`overweight ${sk.ow}%`:''].filter(Boolean).join(' + ')||'no surcharge';
   const exList=EXTRAS.filter(([k])=>flags[k]).map(([,t,v])=>`${t} £${v}`).join(' + ');
   $('breakdown').innerHTML=
-    `<tr><td>Base price</td><td class="r">${gbp(base)}</td></tr>`+
+    `<tr><td>Price showing now</td><td class="r">${gbp(price)}</td></tr>`+
+    `<tr><td>− ticked extras <span class="hint">${exList||'none'}</span></td><td class="r">−${gbp(ext)}</td></tr>`+
+    `<tr><td>= pallet price on its own</td><td class="r">${gbp(base)}</td></tr>`+
     `<tr><td>× ${sk.pct}% <span class="hint">(${parts})</span></td><td class="r">${gbp(up)}</td></tr>`+
-    `<tr><td>+ extras <span class="hint">${exList||'none'}</span></td><td class="r">${gbp(ext)}</td></tr>`+
+    `<tr><td>+ extras back on</td><td class="r">+${gbp(ext)}</td></tr>`+
     `<tr class="tot"><td>New charge</td><td class="r">${gbp(total)}</td></tr>`+
-    `<tr><td class="hint">Normal charge (no oversize)</td><td class="r hint">${gbp(base+ext)}</td></tr>`;
+    (total>price?`<tr><td class="hint">That's on top of the current price</td><td class="r hint">+${gbp(total-price)}</td></tr>`:'');
   $('warn').innerHTML=warn.map(w=>`<div class="warn">${w}</div>`).join('');
 }
 document.querySelectorAll('input').forEach(i=>i.addEventListener('input',calc));
