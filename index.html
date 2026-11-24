@@ -211,6 +211,12 @@
       <div id="filters-depot" class="row" style="margin-top:8px"></div><div id="info-depot" class="hint" style="margin-top:6px"></div></div>
     <div id="loadInfo" class="hint" style="margin-top:10px"></div>
   </div>
+  <div class="card" id="lateCard" style="display:none;border-color:#e0a800">
+    <h2>Add late jobs</h2>
+    <p class="hint">Sheet already printed and more jobs have come in? Drop the newer export here (the whole thing is fine). Anything already on tonight's list is ignored – you choose which new ones to bring in. They go in an <b>Added later</b> section at the end, so the row numbers on the sheet you've printed don't change.</p>
+    <label class="drop" id="lateDrop" style="border-color:#e0a800;background:#fffaf0"><input type="file" id="lateFiles" accept=".csv,text/csv" multiple><b>Choose or drop the newer export(s)</b></label>
+    <div id="lateList"></div>
+  </div>
   <div class="card" id="previewCard" style="display:none">
     <h2>Preview – what goes on tonight's sheet</h2>
     <div class="row" style="margin:2px 0 8px"><span class="hint">Customers on the sheet:</span>
@@ -251,6 +257,9 @@
     <span class="hint" id="pageEst"></span></div>
     <button class="btn" id="dlSheet" style="display:none;margin-top:8px">Download sheet to print</button>
     <p class="hint" style="margin:6px 0 0">If Print doesn't open here, use Download sheet, or open the saved night-check.html on your PC.</p>
+    <div class="row" id="lateOnlyRow" style="margin-top:8px;display:none"><span class="hint">Print:</span>
+      <label class="hint"><input type="radio" name="lateOnly" value="0" checked> Whole sheet</label>
+      <label class="hint"><input type="radio" name="lateOnly" value="1"> Only jobs added later (<span id="lateCount">0</span>)</label></div>
   </div>
   <div class="card" id="sheet"></div>
 </section>
@@ -390,10 +399,10 @@ state.filter = DEF_FILTER();
 if (state.oddball==='JS049, PALLETTS') delete state.oddball;
 state.removed = state.removed || {};
 const save = () => { try{ localStorage.setItem('nightcheck2', JSON.stringify(state)); }catch(e){} };
-const SRC_NAME = {cust:'Palletways customers', pallex:'Pallex customers', depot:'Depot collections', both:'All customers (Palletways + Pallex)'};
+const SRC_NAME = {cust:'Palletways customers', pallex:'Pallex customers', depot:'Depot collections', both:'All customers (Palletways + Pallex)', late:'Added later'};
 // Which printed section a job sits in: Palletways and Pallex customers can be listed together.
-const secKey = c => (state.combine && c.src!=='depot') ? 'both' : c.src;
-const SECS = () => state.combine ? ['both','depot'] : ['cust','pallex','depot'];
+const secKey = c => c.late ? 'late' : (state.combine && c.src!=='depot') ? 'both' : c.src;
+const SECS = () => (state.combine ? ['both','depot'] : ['cust','pallex','depot']).concat('late');
 const SRCS=['cust','pallex','depot'];
 const PAID = c => c && (c.src==='cust' || c.src==='pallex');   // jobs we charge for (revenue protection)
 
@@ -428,7 +437,7 @@ function parsePxDims(s){ return [...String(s||'').matchAll(/\(([^|()]*)\|([\d.]+
 // Pallex base: 120×80 = Euro, 120×100 = Standard (the export has no separate Euro/Standard column).
 const pxBase = d => { if(!d) return ''; const [a,b]=[d.L,d.W].sort((x,y)=>x-y); return b===120&&a===80?'EURO':b===120&&a===100?'STD':''; };
 const pxDim = d => d ? `${d.type?d.type+' ':''}${pxBase(d)?pxBase(d)+' ':''}${d.L}×${d.W}×${d.H}${d.kg?' '+d.kg+'kg':''}` : '';
-function loadPallex(text, name){
+function loadPallex(text, name, dry){
   const rows=parseCSV(text); const head=rows.shift().map(h=>h.trim().toLowerCase());
   const col=k=>head.indexOf(k);
   const ix={con:col('consignment number'),acc:col('customer account'),cname:col('collection point name'),colPc:col('collection point postcode'),
@@ -448,13 +457,14 @@ function loadPallex(text, name){
       rev:parseFloat(g(r,'rev'))||0, lifts, kg:parseFloat(g(r,'kg'))||0, dep:g(r,'dep'), colDep:g(r,'colDep'),
       status:'', svc:g(r,'svc'), due:g(r,'due'), hub:'', decl});
   });
+  if (dry) return fresh;
   state.rows = state.rows.filter(r=>r.src!=='pallex').concat(fresh);
   state.removed = Object.fromEntries(Object.entries(state.removed||{}).filter(([k])=>!k.startsWith('pallex')));
-  state.files.pallex=name; state.pxSkipped=notOurs; state.m={};
+  state.files.pallex=name; state.pxSkipped=notOurs; state.m={}; state.printedAt=null;
   save(); renderAll();
 }
-function loadCSV(text, name, src){
-  if (src==='pallex') return loadPallex(text, name);
+function loadCSV(text, name, src, dry){
+  if (src==='pallex') return loadPallex(text, name, dry);
   const rows = parseCSV(text); const head = rows.shift().map(h=>h.trim().toLowerCase());
   const col = (...ks) => { for (const k of ks){ const i=head.indexOf(k); if(i>=0) return i; } return -1; };
   const ix = {con:col('con no'),cust:col('customer name','customer'),code:head.indexOf('customer name')>=0?col('customer'):-1,
@@ -467,9 +477,10 @@ function loadCSV(text, name, src){
     pc:g(r,'pc').toUpperCase(), colPc:g(r,'colPc').toUpperCase(), rev:parseFloat(g(r,'rev'))||0,
     lifts:Math.max(1,parseInt(g(r,'lifts'))||1), kg:parseFloat(g(r,'kg'))||0, dep:g(r,'dep'), colDep:g(r,'colDep'),
     status:g(r,'status').toUpperCase(), svc:g(r,'svc'), due:g(r,'due'), hub:g(r,'hub')}));
+  if (dry) return fresh;
   state.rows = state.rows.filter(r=>r.src!==src).concat(fresh);
   state.removed = Object.fromEntries(Object.entries(state.removed||{}).filter(([k])=>!k.startsWith(src)));
-  state.files[src]=name; state.m={};
+  state.files[src]=name; state.m={}; state.printedAt=null;
   save(); renderAll();
 }
 
@@ -479,6 +490,11 @@ function loadCSV(text, name, src){
 function oddAccounts(){ return String(state.oddball??'JC999, ODDBALL JOBS').toUpperCase().split(/[,;\s]+/).filter(Boolean); }
 function isOddball(c){ const a=oddAccounts(); return c.src==='cust' && (a.includes((c.code||'').toUpperCase()) || a.includes((c.cust||'').toUpperCase())); }
 function oddLeftOut(c){ const ours=(state.filter.cust.depot||'59'); return isOddball(c) && !(c.dep && c.dep!==ours && c.rev>0); }
+function eligible(c){
+  const f=state.filter[c.src]||{};
+  return !(c.src==='cust' && oddLeftOut(c)) && !(f.depot && c.colDep && c.colDep!==f.depot)
+    && !(c.status && f.statuses && f.statuses.length && !f.statuses.includes(c.status));
+}
 function liftList(ignorePick){
   const pick = ignorePick ? {} : (state.pick||{});
   const hide = document.getElementById('hideZero').checked;
@@ -494,10 +510,12 @@ function liftList(ignorePick){
   const fromPhotos = state.rows.length && state.rows.every(c=>c.ord!=null);
   const sections = fromPhotos ? [['cust','pallex'],['depot']] : state.combine ? [['cust','pallex'],['depot']] : [['cust'],['pallex'],['depot']];
   sections.forEach(srcs=>{
-    state.rows.filter(c => srcs.includes(c.src) && keep(c))
+    state.rows.filter(c => !c.late && srcs.includes(c.src) && keep(c))
     .sort((a,b)=> (a.ord!=null&&b.ord!=null) ? a.ord-b.ord : a.src!=='depot' ? (a.cust.localeCompare(b.cust) || a.con.localeCompare(b.con)) : (a.colPc.localeCompare(b.colPc) || a.con.localeCompare(b.con)))
     .forEach(c => { for (let l=1;l<=c.lifts;l++) out.push({n:n++, c, l}); });
   });
+  state.rows.filter(c => c.late && keep(c)).sort((a,b)=>a.lateOrd-b.lateOrd)
+    .forEach(c => { for (let l=1;l<=c.lifts;l++) out.push({n:n++, c, l}); });
   return out;
 }
 
@@ -528,12 +546,12 @@ function compactSheet(groups,lifts,d){
   const cols=`<colgroup><col style="width:7mm"><col style="width:26mm"><col style="width:24mm"><col style="width:17mm"><col style="width:19mm"><col style="width:10mm"><col style="width:13mm"><col style="width:8mm">
       <col style="width:14mm"><col style="width:12mm"><col style="width:12mm"><col style="width:12mm"><col style="width:12mm"><col style="width:6mm"></colgroup>`;
   const table = (src, gs) => `<table class="cs" style="margin-top:6px">${cols}
-    <thead><tr class="sec"><td colspan="14">${SRC_NAME[src].toUpperCase()} – ${src==='cust'?'measure and check the charge':src==='pallex'?'measure and check against the dims the customer entered':src==='both'?'shaded rows marked PX are Pallex':'check the pallet type the depot keyed'}</td></tr>
+    <thead><tr class="sec"><td colspan="14">${SRC_NAME[src].toUpperCase()} – ${src==='cust'?'measure and check the charge':src==='pallex'?'measure and check against the dims the customer entered':src==='both'?'shaded rows marked PX are Pallex':src==='late'?'jobs added after the first sheet was printed (PX = Pallex, DC = depot collection)':'check the pallet type the depot keyed'}</td></tr>
     <tr><th>Row</th><th>Con No</th><th>${src==='depot'?'Collect from':'Customer'}</th><th>Del PC</th><th>${src==='pallex'?'Entered':'Declared'}</th><th>Con kg</th><th>£</th><th>Lift</th><th>S / E</th><th>L</th><th>W</th><th>H</th><th>KG</th><th>✔</th></tr></thead><tbody>
     ${gs.map((g,gi)=>g.l.map((x,i)=>{ const c=g.c;
       const who = c.src==='depot' ? esc(c.colPc) : esc(c.cust);
       const info = i===0
-        ? `<td class="c">${c.src==='pallex'?'<span class="px">PX</span> ':''}${esc(c.con)}</td><td class="cu">${who}</td><td>${esc(c.pc)}</td><td class="m">${c.src==='pallex'?`<span class="tag3">${esc(pxDim(c.decl?.[0])||c.bu)}</span>`:`<b>${esc(c.bu)}</b>`}${svcTag(c)?`<div class="tag2">${svcTag(c)}</div>`:''}</td><td class="m">${c.kg}</td><td class="m">${PAID(c)?gbp(c.rev).slice(1):'–'}</td>`
+        ? `<td class="c">${c.src==='pallex'?'<span class="px">PX</span> ':c.late&&c.src==='depot'?'<span class="px">DC</span> ':''}${esc(c.con)}</td><td class="cu">${who}</td><td>${esc(c.pc)}</td><td class="m">${c.src==='pallex'?`<span class="tag3">${esc(pxDim(c.decl?.[0])||c.bu)}</span>`:`<b>${esc(c.bu)}</b>`}${svcTag(c)?`<div class="tag2">${svcTag(c)}</div>`:''}</td><td class="m">${c.kg}</td><td class="m">${PAID(c)?gbp(c.rev).slice(1):'–'}</td>`
         : `<td></td><td></td><td></td>${c.src==='pallex'?`<td class="m tag3">${esc(pxDim(c.decl?.[i]))}</td>`:'<td></td>'}<td></td><td></td>`;
       const dd=sizeDefault(c), pre=v=>dd?`<span class="pre">${v}</span>`:'';
       const gap = (i===0 && gi>0 && c.src!=='depot' && gs[gi-1].c.cust!==c.cust) ? '<tr class="gap"><td colspan="14"></td></tr>' : '';
@@ -543,9 +561,14 @@ function compactSheet(groups,lifts,d){
       <span>Collecting depot ${esc(state.filter.cust.depot||state.filter.depot.depot||'all')} · ${groups.length} cons · ${lifts} lifts · cm / kg</span></div>
       <div class="sh-sign">Date <span class="line">${d}</span> Measured by <span class="line"></span></div></div>
     <div class="sh-key">Standard or euro with no overhang: just write <b>S</b> or <b>E</b> + height in the S / E box (e.g. <b>S70</b>, <b>E80</b>). On Pallex (PX) jobs S = 120×100, E = 120×80. Oversize: write full <b>L, W, H</b>. KG only if different to booked. <b>All lifts the same?</b> Fill in the first lift, then just <b>draw a line down</b> through the boxes below it.</div>
-    ${SECS().map(src=>{ const gs=groups.filter(g=>secKey(g.c)===src); return gs.length?table(src,gs):''; }).join('')}`;
+    ${SECS().filter(k=>!state.lateOnly||k==='late').map(src=>{ const gs=groups.filter(g=>secKey(g.c)===src); return gs.length?table(src,gs):''; }).join('')}`;
 }
 function renderSheet(){
+  const nLate=state.rows.filter(c=>c.late).length;
+  document.getElementById('lateOnlyRow').style.display = nLate ? '' : 'none';
+  document.getElementById('lateCount').textContent=nLate;
+  if (!nLate) state.lateOnly=false;
+  document.querySelectorAll('input[name=lateOnly]').forEach(r=>r.checked=(r.value==='1')===!!state.lateOnly);
   const L=liftList(); const d=new Date().toLocaleDateString('en-GB');
   if (!L.length){ document.getElementById('sheet').innerHTML='<p class="hint">Nothing to print. Load a CSV, or check the filters on step 1.</p>'; return; }
   const groups=[]; L.forEach(x=>{ const g=groups[groups.length-1]; if(g&&g.c===x.c) g.l.push(x); else groups.push({c:x.c,l:[x]}); });
@@ -866,7 +889,7 @@ function renderPreview(){
     ${hidden.length?`<p class="small" style="margin-top:10px"><b>Removed:</b> ${hidden.map(c=>`${esc(c.con)} <a href="#" class="putBack" data-id="${c.id}">put back</a>`).join(' · ')}</p>`:''}`;
 }
 
-function renderAll(){ renderFilters(); renderLoadInfo(); renderPreview(); renderSheet(); renderCheck(); renderSummary(); }
+function renderAll(){ renderFilters(); renderLoadInfo(); renderPreview(); document.getElementById('lateCard').style.display = state.rows.length ? '' : 'none'; renderSheet(); renderCheck(); renderSummary(); }
 
 /* ================= Events ================= */
 document.getElementById('nav').addEventListener('click',e=>{
@@ -889,6 +912,9 @@ async function loadFiles(files){
     const text=await f.text(); const src=detectExport(text);
     if (!src){ out.push(`<span class="warn">${esc(f.name)}: not a Palletways or Pallex export</span>`); continue; }
     if (seen[src]) out.push(`<span class="warn">${esc(f.name)}: a second ${SRC_NAME[src]} file – it replaced ${esc(seen[src])}</span>`);
+    if (state.rows.some(r=>r.src===src) && (state.printedAt || measuredAlready())){
+      out.push(`${esc(f.name)} → <b>${SRC_NAME[src]}</b> is already loaded and the sheet's been printed, so it's gone to <b>Add late jobs</b> below instead of replacing tonight's list.`);
+      lateFromFiles([f]); continue; }
     seen[src]=f.name; loadCSV(text, f.name, src);
     out.push(`${esc(f.name)} → <b>${SRC_NAME[src]}</b>`);
   }
@@ -979,7 +1005,8 @@ document.querySelectorAll('.sumLayout').forEach(sel=>{ sel.value=sumLayout; sel.
   document.querySelectorAll('.sumLayout').forEach(o=>o.value=sumLayout); renderSummary(); }); });
 document.getElementById('printChg').addEventListener('click',printSummary);
 document.getElementById('layout').addEventListener('change',renderSheet);
-document.getElementById('printBtn').addEventListener('click',()=>{ try{ window.print(); }catch(e){} });
+document.querySelectorAll('input[name=lateOnly]').forEach(r=>r.addEventListener('change',()=>{ state.lateOnly=r.value==='1'; save(); renderSheet(); }));
+document.getElementById('printBtn').addEventListener('click',()=>{ state.printedAt=Date.now(); save(); try{ window.print(); }catch(e){} });
 document.addEventListener('change',e=>{
   const i=e.target; if(!i.classList||!i.classList.contains('newIn')) return;
   const c=state.rows.find(r=>r.id===i.dataset.id); if(!c) return;
@@ -1078,6 +1105,39 @@ document.getElementById('photoBtn').addEventListener('click',()=>document.getEle
   $('calcClose').addEventListener('click',()=>$('calcModal').hidden=true);
   $('calcModal').addEventListener('click',e=>{ if(e.target.id==='calcModal') $('calcModal').hidden=true; });
   document.addEventListener('keydown',e=>{ if(e.key==='Escape') $('calcModal').hidden=true; });
+}
+/* ---------- Late jobs: add new cons from a newer export without moving printed row numbers ---------- */
+let lateCands=[];
+async function lateFromFiles(files){
+  const el=document.getElementById('lateList'); const notes=[]; lateCands=[];
+  const have=new Set(state.rows.map(c=>c.src+'|'+c.con.trim().toUpperCase()));
+  for (const f of files){
+    const text=await f.text(), src=detectExport(text);
+    if (!src){ notes.push(`${esc(f.name)}: not a Palletways or Pallex export`); continue; }
+    const rows=loadCSV(text,f.name,src,true)||[];
+    const fresh=rows.filter(c=>!have.has(c.src+'|'+c.con.trim().toUpperCase()) && eligible(c));
+    notes.push(`${esc(f.name)} → ${SRC_NAME[src]}: <b>${fresh.length}</b> new job(s), ${rows.length-fresh.length} already on the list or not for tonight`);
+    fresh.forEach(c=>{ have.add(c.src+'|'+c.con.trim().toUpperCase()); lateCands.push(c); });
+  }
+  el.innerHTML = `<p class="hint" style="margin:8px 0">${notes.join('<br>')}</p>` + (lateCands.length ? `
+    <table class="ck"><thead><tr><th><input type="checkbox" id="lateAll" checked></th><th>Con No</th><th>Customer / collect from</th><th>Del PC</th><th>Declared</th><th>Lifts</th><th>Kg</th><th>£</th><th>Type</th></tr></thead><tbody>
+    ${lateCands.map((c,i)=>`<tr><td><input type="checkbox" class="lateCb" data-i="${i}" checked></td><td><b>${esc(c.con)}</b></td><td>${c.src==='depot'?esc(c.colPc):esc(c.cust)}</td><td>${esc(c.pc)}</td><td>${esc(c.bu)}</td><td>${c.lifts}</td><td>${c.kg}</td><td>${PAID(c)?gbp(c.rev):'–'}</td><td class="small">${SRC_NAME[c.src]}</td></tr>`).join('')}
+    </tbody></table>
+    <div class="row" style="margin-top:10px"><button class="btn solid" id="lateAdd">Add ticked jobs</button><span class="hint">Then print just these from step 2 (choose “Only jobs added later”).</span></div>` : '<p class="hint">Nothing new to add.</p>');
+  const all=document.getElementById('lateAll'); if (all) all.onchange=()=>document.querySelectorAll('.lateCb').forEach(cb=>cb.checked=all.checked);
+  const add=document.getElementById('lateAdd'); if (add) add.onclick=()=>{
+    const pick=[...document.querySelectorAll('.lateCb:checked')].map(cb=>lateCands[+cb.dataset.i]);
+    let ord=Math.max(0,...state.rows.filter(c=>c.late).map(c=>c.lateOrd||0));
+    pick.forEach((c,i)=>{ c.id=c.src+'L'+Date.now()+'_'+i; c.late=true; c.lateOrd=++ord; state.rows.push(c); });
+    state.lateOnly = true; save(); renderAll();
+    document.getElementById('lateList').innerHTML=`<p class="warn" style="color:#24521a">Added ${pick.length} job(s) in the “Added later” section. Go to step 2 to print just these.</p>`;
+  };
+}
+{ const d=document.getElementById('lateDrop'), inp=document.getElementById('lateFiles');
+  inp.addEventListener('change',()=>{ lateFromFiles([...inp.files]); inp.value=''; });
+  ['dragenter','dragover'].forEach(ev=>d.addEventListener(ev,e=>{ e.preventDefault(); d.classList.add('over'); }));
+  ['dragleave','drop'].forEach(ev=>d.addEventListener(ev,e=>{ e.preventDefault(); d.classList.remove('over'); }));
+  d.addEventListener('drop',e=>{ if(e.dataTransfer?.files?.length) lateFromFiles([...e.dataTransfer.files]); });
 }
 let dlCap=null;
 { const o=document.getElementById('oddAcc'); o.value=state.oddball??'JC999, ODDBALL JOBS';
@@ -1182,7 +1242,7 @@ Include only rows where something is written. Use null for any box that is blank
       msg.textContent=`Read ${n} lifts from the photo${left?` – ${left} lift(s) still have no sizes`:''}. Yellow = read from photo.`;
     } else {
       const out=await sampleFn.json(`These are photos of the pages of a printed "SK Distribution – Night measure sheet" that staff have filled in by hand.
-The printed table has sections headed "PALLETWAYS CUSTOMERS", "PALLEX CUSTOMERS", "ALL CUSTOMERS (PALLETWAYS + PALLEX)" and "DEPOT COLLECTIONS". A Pallex job is any row whose con number has a small "PX" box in front of it (its printed cells are lightly shaded) – give those section "pallex"; other customer rows are "customers". For Pallex rows the Declared/Entered column shows, on every lift row, the size the customer entered for that pallet, e.g. "HALF EURO 120×80×120 100kg" – copy it into "declared" for each row. Printed columns: Row (bold number), Con No, Customer (in Depot collections this column is "Collect from" and holds a postcode), Del PC, Declared (pallet codes such as "QP-1" or "LP-1,HP-1", sometimes with a small tag underneath: SAT, TIMED or AM), Con kg, £ (consignment revenue; "–" in Depot collections), Lift (e.g. "1/2").
+The printed table has sections headed "PALLETWAYS CUSTOMERS", "PALLEX CUSTOMERS", "ALL CUSTOMERS (PALLETWAYS + PALLEX)", "DEPOT COLLECTIONS" and "ADDED LATER". In ADDED LATER, a con number with a small "DC" box in front is a depot collection (section "depot"). A Pallex job is any row whose con number has a small "PX" box in front of it (its printed cells are lightly shaded) – give those section "pallex"; other customer rows are "customers". For Pallex rows the Declared/Entered column shows, on every lift row, the size the customer entered for that pallet, e.g. "HALF EURO 120×80×120 100kg" – copy it into "declared" for each row. Printed columns: Row (bold number), Con No, Customer (in Depot collections this column is "Collect from" and holds a postcode), Del PC, Declared (pallet codes such as "QP-1" or "LP-1,HP-1", sometimes with a small tag underneath: SAT, TIMED or AM), Con kg, £ (consignment revenue; "–" in Depot collections), Lift (e.g. "1/2").
 A consignment with several lifts prints its details on the first lift row only; the following rows are blank apart from Row and Lift – they belong to the consignment above, so repeat its details on them.
 ${HAND}
 
