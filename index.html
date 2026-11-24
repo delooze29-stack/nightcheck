@@ -102,6 +102,9 @@
   .cs tr.gap td{height:2.2mm;border:0;padding:0}
   .cs tr.gap + tr td{border-top:2px solid #000}
   .cs .tag3{font-size:9px;line-height:1.05;font-weight:600;white-space:normal}
+  .cs tr.pxrow td:not(.w){background:#f1f1f1;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .cs tr.pxrow td.w{background:#fff}
+  .cs .px{display:inline-block;font-size:8px;font-weight:800;border:1px solid #000;border-radius:2px;padding:0 2px;line-height:1.2;vertical-align:1px}
   .cs td.sub{color:#555;font-size:9.5px}
   .cs tr{break-inside:avoid;page-break-inside:avoid}
   .cs thead{display:table-header-group}
@@ -193,6 +196,9 @@
   </div>
   <div class="card" id="previewCard" style="display:none">
     <h2>Preview – what goes on tonight's sheet</h2>
+    <div class="row" style="margin:2px 0 8px"><span class="hint">Customers on the sheet:</span>
+      <label class="hint"><input type="radio" name="combine" value="0"> Palletways and Pallex separately</label>
+      <label class="hint"><input type="radio" name="combine" value="1"> All customers together</label></div>
     <p class="hint">Remove any job you don't want on the sheet before printing. Removed jobs are listed underneath so you can put them back.</p>
     <div class="scroll" id="preview"></div>
   </div>
@@ -343,7 +349,10 @@ state.filter = DEF_FILTER();
 if (state.oddball==='JS049, PALLETTS') delete state.oddball;
 state.removed = state.removed || {};
 const save = () => { try{ localStorage.setItem('nightcheck2', JSON.stringify(state)); }catch(e){} };
-const SRC_NAME = {cust:'Our customers', pallex:'Pallex', depot:'Depot collections'};
+const SRC_NAME = {cust:'Palletways customers', pallex:'Pallex customers', depot:'Depot collections', both:'All customers (Palletways + Pallex)'};
+// Which printed section a job sits in: Palletways and Pallex customers can be listed together.
+const secKey = c => (state.combine && c.src!=='depot') ? 'both' : c.src;
+const SECS = () => state.combine ? ['both','depot'] : ['cust','pallex','depot'];
 const SRCS=['cust','pallex','depot'];
 const PAID = c => c && (c.src==='cust' || c.src==='pallex');   // jobs we charge for (revenue protection)
 
@@ -431,17 +440,19 @@ function liftList(ignorePick){
   const pick = ignorePick ? {} : (state.pick||{});
   const hide = document.getElementById('hideZero').checked;
   const out=[]; let n=1;
-  SRCS.forEach(src=>{
-    const f = state.filter[src]||{};
-    state.rows.filter(c => c.src===src
+  const keep = c => { const src=c.src, f=state.filter[src]||{}; return true
       && !(src==='cust' && hide && !c.rev)
       && !(src==='cust' && oddLeftOut(c))
       && !state.removed?.[c.id]
       && !(src!=='depot' && pick.cust && pick.cust[c.cust])
       && !(src==='depot' && pick.depot)
       && !(f.depot && c.colDep && c.colDep !== f.depot)
-      && !(c.status && f.statuses && f.statuses.length && !f.statuses.includes(c.status)))
-    .sort((a,b)=> (a.ord!=null&&b.ord!=null) ? a.ord-b.ord : src!=='depot' ? (a.cust.localeCompare(b.cust) || a.con.localeCompare(b.con)) : (a.colPc.localeCompare(b.colPc) || a.con.localeCompare(b.con)))
+      && !(c.status && f.statuses && f.statuses.length && !f.statuses.includes(c.status)); };
+  const fromPhotos = state.rows.length && state.rows.every(c=>c.ord!=null);
+  const sections = fromPhotos ? [['cust','pallex'],['depot']] : state.combine ? [['cust','pallex'],['depot']] : [['cust'],['pallex'],['depot']];
+  sections.forEach(srcs=>{
+    state.rows.filter(c => srcs.includes(c.src) && keep(c))
+    .sort((a,b)=> (a.ord!=null&&b.ord!=null) ? a.ord-b.ord : a.src!=='depot' ? (a.cust.localeCompare(b.cust) || a.con.localeCompare(b.con)) : (a.colPc.localeCompare(b.colPc) || a.con.localeCompare(b.con)))
     .forEach(c => { for (let l=1;l<=c.lifts;l++) out.push({n:n++, c, l}); });
   });
   return out;
@@ -474,22 +485,22 @@ function compactSheet(groups,lifts,d){
   const cols=`<colgroup><col style="width:7mm"><col style="width:26mm"><col style="width:24mm"><col style="width:17mm"><col style="width:19mm"><col style="width:10mm"><col style="width:13mm"><col style="width:8mm">
       <col style="width:14mm"><col style="width:12mm"><col style="width:12mm"><col style="width:12mm"><col style="width:12mm"><col style="width:6mm"></colgroup>`;
   const table = (src, gs) => `<table class="cs" style="margin-top:6px">${cols}
-    <thead><tr class="sec"><td colspan="14">${SRC_NAME[src].toUpperCase()} – ${src==='cust'?'measure and check the charge':src==='pallex'?'measure and check against the dims the customer entered':'check the pallet type the depot keyed'}</td></tr>
+    <thead><tr class="sec"><td colspan="14">${SRC_NAME[src].toUpperCase()} – ${src==='cust'?'measure and check the charge':src==='pallex'?'measure and check against the dims the customer entered':src==='both'?'shaded rows marked PX are Pallex':'check the pallet type the depot keyed'}</td></tr>
     <tr><th>Row</th><th>Con No</th><th>${src==='depot'?'Collect from':'Customer'}</th><th>Del PC</th><th>${src==='pallex'?'Entered':'Declared'}</th><th>Con kg</th><th>£</th><th>Lift</th><th>S / E</th><th>L</th><th>W</th><th>H</th><th>KG</th><th>✔</th></tr></thead><tbody>
     ${gs.map((g,gi)=>g.l.map((x,i)=>{ const c=g.c;
       const who = c.src==='depot' ? esc(c.colPc) : esc(c.cust);
       const info = i===0
-        ? `<td class="c">${esc(c.con)}</td><td class="cu">${who}</td><td>${esc(c.pc)}</td><td class="m">${c.src==='pallex'?`<span class="tag3">${esc(pxDim(c.decl?.[0])||c.bu)}</span>`:`<b>${esc(c.bu)}</b>`}${svcTag(c)?`<div class="tag2">${svcTag(c)}</div>`:''}</td><td class="m">${c.kg}</td><td class="m">${PAID(c)?gbp(c.rev).slice(1):'–'}</td>`
+        ? `<td class="c">${c.src==='pallex'?'<span class="px">PX</span> ':''}${esc(c.con)}</td><td class="cu">${who}</td><td>${esc(c.pc)}</td><td class="m">${c.src==='pallex'?`<span class="tag3">${esc(pxDim(c.decl?.[0])||c.bu)}</span>`:`<b>${esc(c.bu)}</b>`}${svcTag(c)?`<div class="tag2">${svcTag(c)}</div>`:''}</td><td class="m">${c.kg}</td><td class="m">${PAID(c)?gbp(c.rev).slice(1):'–'}</td>`
         : `<td></td><td></td><td></td>${c.src==='pallex'?`<td class="m tag3">${esc(pxDim(c.decl?.[i]))}</td>`:'<td></td>'}<td></td><td></td>`;
       const dd=sizeDefault(c), pre=v=>dd?`<span class="pre">${v}</span>`:'';
       const gap = (i===0 && gi>0 && c.src!=='depot' && gs[gi-1].c.cust!==c.cust) ? '<tr class="gap"><td colspan="14"></td></tr>' : '';
-      return `${gap}<tr class="${i===0?'first':''}"><td class="n">${x.n}</td>${info}<td class="m">${x.l}/${c.lifts}</td><td class="w se"></td><td class="w">${pre(dd&&dd.L)}</td><td class="w">${pre(dd&&dd.W)}</td><td class="w"></td><td class="w"></td><td></td></tr>`;
+      return `${gap}<tr class="${i===0?'first':''}${c.src==='pallex'?' pxrow':''}"><td class="n">${x.n}</td>${info}<td class="m">${x.l}/${c.lifts}</td><td class="w se"></td><td class="w">${pre(dd&&dd.L)}</td><td class="w">${pre(dd&&dd.W)}</td><td class="w"></td><td class="w"></td><td></td></tr>`;
     }).join('')).join('')}</tbody></table>`;
   return `<div class="sh-top"><div><b>SK Distribution – Night measure sheet</b><br>
       <span>Collecting depot ${esc(state.filter.cust.depot||state.filter.depot.depot||'all')} · ${groups.length} cons · ${lifts} lifts · cm / kg</span></div>
       <div class="sh-sign">Date <span class="line">${d}</span> Measured by <span class="line"></span></div></div>
     <div class="sh-key">Standard or euro with no overhang: just write <b>S</b> or <b>E</b> + height in the S / E box (e.g. <b>S70</b>, <b>E80</b>). Oversize: write full <b>L, W, H</b>. KG only if different to booked. <b>All lifts the same?</b> Fill in the first lift, then write <b>SAME</b> (or draw a line down) on the others.</div>
-    ${SRCS.map(src=>{ const gs=groups.filter(g=>g.c.src===src); return gs.length?table(src,gs):''; }).join('')}`;
+    ${SECS().map(src=>{ const gs=groups.filter(g=>secKey(g.c)===src); return gs.length?table(src,gs):''; }).join('')}`;
 }
 function renderSheet(){
   const L=liftList(); const d=new Date().toLocaleDateString('en-GB');
@@ -505,7 +516,7 @@ function renderSheet(){
       <span>Collecting depot ${esc(state.filter.cust.depot||'all')} · ${groups.length} cons · ${lifts} lifts</span></div>
       <div class="sh-sign">Date <span class="line">${d}</span> Measured by <span class="line"></span></div></div>
     <div class="sh-key">Standard or euro with no overhang: write <b>S</b>/<b>E</b> + height (e.g. <b>S70</b>, <b>E80</b>). Oversize: full <b>L, W, H</b> in cm, including overhang. KG only if different to booked. Tick ✔ the con when done.</div>
-    ${groups.map((g,gi)=>{ const c=g.c; return `${(gi===0||groups[gi-1].c.src!==c.src)?`<h3 class="sec-h">${SRC_NAME[c.src]}</h3>`:''}<div class="con${g.l.length>4?' big':''}">
+    ${groups.map((g,gi)=>{ const c=g.c; return `${(gi===0||secKey(groups[gi-1].c)!==secKey(c))?`<h3 class="sec-h">${SRC_NAME[secKey(c)]}</h3>`:''}<div class="con${g.l.length>4?' big':''}">
       <div class="con-h">
         <div class="con-no">${esc(c.con)}</div>
         <div class="con-cust"><b>${c.src==='depot'?'Depot collection':esc(c.cust)}${c.src==='pallex'?' <span>(Pallex)</span>':''}</b>${c.code&&c.code!==c.cust?` <span>${esc(c.code)}</span>`:''}<br>
@@ -690,9 +701,9 @@ function renderCheck(){
   let prevSrc=null;
   el.innerHTML = `<table class="ck"><thead><tr><th>Con</th><th>Row</th><th>Lift</th><th>S / E</th><th>L cm</th><th>W cm</th><th>H cm</th><th>kg</th><th>Lift is</th><th>What to do on Palletways</th></tr></thead>
     ${G.map(g=>{ const c=g.c, r=analyseCon(c,g.l);
-      const head = c.src!==prevSrc ? `<tbody><tr><td colspan="10" style="background:#1f3a68;color:#fff;font-weight:700">${SRC_NAME[c.src]}</td></tr></tbody>` : ''; prevSrc=c.src;
+      const head = secKey(c)!==prevSrc ? `<tbody><tr><td colspan="10" style="background:#1f3a68;color:#fff;font-weight:700">${SRC_NAME[secKey(c)]}</td></tr></tbody>` : ''; prevSrc=secKey(c);
       return head + `<tbody data-id="${c.id}" data-st="${r.status}">` + g.l.map((x,i)=>{ const m=state.m[x.n]||{}, ph=state.ph?.[x.n]||{};
-        return `<tr>${i===0?`<td class="info" rowspan="${g.l.length}"><b>${esc(c.con)}</b>${g.l.length>1?` <button class="btn sameAll" data-id="${c.id}" title="Copy lift 1's sizes to every lift" style="padding:2px 8px;font-size:12px;float:right">Same as lift 1</button>`:''}<div class="small">${c.src==='depot'?'Collect '+esc(c.colPc):esc(c.cust)}<br>${esc(c.pc)} · ${c.src==='pallex'?'Pallex ':''}declared <b>${esc(c.bu)}</b> · ${c.kg}kg${PAID(c)?(c.rev?' · '+gbp(c.rev):''):''}</div>${PAID(c)&&(!c.rev||c.revEdit)?`<div class="small" style="margin-top:4px">Revenue £ <input type="number" step="any" class="revIn" data-id="${c.id}" value="${c.rev||''}" style="width:80px;padding:3px;font-size:14px;display:inline-block${c.rev?'':';border-color:#b3261e'}">${c.rev?'':' <span class="warn">missing</span>'}</div>`:''}</td>`:''}
+        return `<tr>${i===0?`<td class="info" rowspan="${g.l.length}">${c.src==='pallex'?'<span class="pill" style="font-size:11px;padding:1px 6px;margin-right:4px">PX</span>':''}<b>${esc(c.con)}</b>${g.l.length>1?` <button class="btn sameAll" data-id="${c.id}" title="Copy lift 1's sizes to every lift" style="padding:2px 8px;font-size:12px;float:right">Same as lift 1</button>`:''}<div class="small">${c.src==='depot'?'Collect '+esc(c.colPc):esc(c.cust)}<br>${esc(c.pc)} · ${c.src==='pallex'?'Pallex ':''}declared <b>${esc(c.bu)}</b> · ${c.kg}kg${PAID(c)?(c.rev?' · '+gbp(c.rev):''):''}</div>${PAID(c)&&(!c.rev||c.revEdit)?`<div class="small" style="margin-top:4px">Revenue £ <input type="number" step="any" class="revIn" data-id="${c.id}" value="${c.rev||''}" style="width:80px;padding:3px;font-size:14px;display:inline-block${c.rev?'':';border-color:#b3261e'}">${c.rev?'':' <span class="warn">missing</span>'}</div>`:''}</td>`:''}
           <td><b>${x.n}</b></td><td class="small">${x.l}/${c.lifts}</td>
           <td><input class="dim code${ph.code?' ph':''}" type="text" data-n="${x.n}" data-f="code" value="${esc(m.code??'')}" style="width:62px;text-transform:uppercase"></td>
           ${['L','W','H','kg'].map(f=>`<td><input class="dim${ph[f]?' ph':''}" ${sizeDefault(c)&&(f==='L'||f==='W')?`placeholder="${sizeDefault(c)[f]}" title="Default for this customer – type to change"`:''} type="number" inputmode="decimal" step="any" data-n="${x.n}" data-f="${f}" value="${m[f]??''}"></td>`).join('')}
@@ -781,6 +792,7 @@ function renderSummary(){
 
 let pvSort={k:null,dir:1};
 function renderPreview(){
+  document.querySelectorAll('input[name=combine]').forEach(r=>r.checked = (r.value==='1')===!!state.combine);
   const card=document.getElementById('previewCard'), el=document.getElementById('preview');
   const all=groupsOf(liftList(true)).map(g=>g.c);           // everything that could go on the sheet
   const G=groupsOf(liftList());                               // what will go on it
@@ -804,7 +816,7 @@ function renderPreview(){
   let prev=null;
   el.innerHTML = chips + `<p class="hint" style="margin:6px 0">${rows.length} cons / ${G.reduce((t,g)=>t+g.l.length,0)} lifts on the sheet. Click a column heading to sort (this only changes the preview).</p>
     <table class="ck"><thead><tr>${cols.map(([k,t])=>`<th class="srt" data-k="${k}">${t}${pvSort.k===k?(pvSort.dir>0?' ▲':' ▼'):''}</th>`).join('')}<th></th></tr></thead><tbody>
-    ${rows.map(c=>{ const sec=(!pvSort.k && c.src!==prev)?`<tr><td colspan="9" style="background:#1f3a68;color:#fff;font-weight:700">${SRC_NAME[c.src]}</td></tr>`:''; prev=c.src;
+    ${rows.map(c=>{ const sec=(!pvSort.k && secKey(c)!==prev)?`<tr><td colspan="9" style="background:#1f3a68;color:#fff;font-weight:700">${SRC_NAME[secKey(c)]}</td></tr>`:''; prev=secKey(c);
       return sec+`<tr><td><b>${esc(c.con)}</b></td><td>${c.src==='depot'?'<span class="hint">Depot col</span> '+esc(c.colPc):esc(c.cust)}</td><td>${esc(c.pc)}</td><td>${esc(c.bu)}</td><td>${c.lifts}</td><td>${c.kg}</td><td>${PAID(c)?gbp(c.rev):'–'}</td><td class="small">${c.src==='pallex'?'Pallex':esc(c.status)}</td>
         <td><button class="btn rmJob" data-id="${c.id}" title="Leave this job off the sheet" style="padding:3px 10px">✕</button></td></tr>`; }).join('')}
     </tbody></table>
@@ -851,6 +863,10 @@ document.querySelectorAll('.fileIn').forEach(inp=>inp.addEventListener('change',
 }));
 function measuredAlready(){ return Object.values(state.m||{}).some(v=>v&&Object.values(v).some(q=>q)); }
 function blockedMsg(){ document.getElementById('preview').insertAdjacentHTML('afterbegin','<p class="warn">Measurements are already in for tonight – changing what\u2019s on the sheet now would move the row numbers. Do this before printing, or press Start a new night.</p>'); }
+document.querySelectorAll('input[name=combine]').forEach(r=>r.addEventListener('change',()=>{
+  if (measuredAlready()){ r.checked=false; document.querySelector(`input[name=combine][value="${state.combine?1:0}"]`).checked=true; blockedMsg(); return; }
+  state.combine = r.value==='1'; save(); renderAll();
+}));
 document.getElementById('preview').addEventListener('change',e=>{
   const cb=e.target; if(!cb.dataset.cust && !cb.dataset.dep) return;
   if (measuredAlready()){ cb.checked=!cb.checked; blockedMsg(); return; }
@@ -1077,7 +1093,7 @@ Include only rows where something is written. Use null for any box that is blank
       msg.textContent=`Read ${n} lifts from the photo${left?` – ${left} lift(s) still have no sizes`:''}. Yellow = read from photo.`;
     } else {
       const out=await sampleFn.json(`These are photos of the pages of a printed "SK Distribution – Night measure sheet" that staff have filled in by hand.
-The printed table has up to three sections: "OUR CUSTOMERS", "PALLEX" and "DEPOT COLLECTIONS". In the PALLEX section the "Entered" column shows, on every lift row, the size the customer entered for that pallet, e.g. "HALF 120×80×120 100kg" – copy it into "declared" for each row. Printed columns: Row (bold number), Con No, Customer (in Depot collections this column is "Collect from" and holds a postcode), Del PC, Declared (pallet codes such as "QP-1" or "LP-1,HP-1", sometimes with a small tag underneath: SAT, TIMED or AM), Con kg, £ (consignment revenue; "–" in Depot collections), Lift (e.g. "1/2").
+The printed table has sections headed "PALLETWAYS CUSTOMERS", "PALLEX CUSTOMERS", "ALL CUSTOMERS (PALLETWAYS + PALLEX)" and "DEPOT COLLECTIONS". A Pallex job is any row whose con number has a small "PX" box in front of it (its printed cells are lightly shaded) – give those section "pallex"; other customer rows are "customers". For Pallex rows the Declared/Entered column shows, on every lift row, the size the customer entered for that pallet, e.g. "HALF 120×80×120 100kg" – copy it into "declared" for each row. Printed columns: Row (bold number), Con No, Customer (in Depot collections this column is "Collect from" and holds a postcode), Del PC, Declared (pallet codes such as "QP-1" or "LP-1,HP-1", sometimes with a small tag underneath: SAT, TIMED or AM), Con kg, £ (consignment revenue; "–" in Depot collections), Lift (e.g. "1/2").
 A consignment with several lifts prints its details on the first lift row only; the following rows are blank apart from Row and Lift – they belong to the consignment above, so repeat its details on them.
 ${HAND}
 
