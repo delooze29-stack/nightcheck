@@ -60,6 +60,7 @@
   .sumt input.newIn{width:64px!important;padding:2px!important;font-size:13px!important}
   .modal{position:fixed;inset:0;background:rgba(15,25,45,.55);display:flex;align-items:flex-start;justify-content:center;padding:6vh 12px;z-index:50;overflow:auto}
   .modal[hidden]{display:none}
+  @media print{.modal{display:none!important}}
   .mbox{background:#fff;border-radius:10px;max-width:560px;width:100%;padding:18px;box-shadow:0 10px 40px rgba(0,0,0,.3)}
   .mbox h3{font-size:14px;margin:14px 0 6px;color:var(--navy)}
   .ex{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px}
@@ -73,6 +74,15 @@
   .chip span{color:var(--muted);font-size:12px}
   .chip.dep{border-style:dashed}
   th.srt{cursor:pointer;user-select:none}th.srt:hover{color:var(--teal)}
+  .calcgrid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px;margin-top:10px}
+  @media(max-width:640px){.calcgrid{grid-template-columns:minmax(0,1fr)}}
+  .clab{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px}
+  .c4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+  .ctotal{font-size:40px;font-weight:800;color:var(--navy);line-height:1.1}
+  .cbreak{width:100%;border-collapse:collapse;font-size:14px}.cbreak td{padding:5px 0;border-bottom:1px solid var(--line)}.cbreak td.r{text-align:right;white-space:nowrap}
+  .cbreak tr.tot td{border-top:2px solid var(--ink);font-weight:800}
+  .cwarn{color:#b3261e;font-weight:700;font-size:14px;border:1px solid currentColor;border-radius:6px;padding:6px 8px;margin:6px 0}
+  .cref{border-collapse:collapse;font-size:12px;min-width:560px}.cref th,.cref td{border:1px solid var(--line);padding:3px 5px;text-align:center}.cref th{background:#eef3f7}.cref td.on{background:var(--teal);color:#fff;font-weight:800}
   .ck{width:100%;border-collapse:collapse}
   .ck tbody{border-top:2px solid #b9c1cc}
   .ck td{border-bottom:1px solid var(--line);padding:4px 6px}
@@ -164,7 +174,7 @@
     <button data-v="sheet">2. Print sheet</button>
     <button data-v="check">3. Check &amp; change</button>
     <button data-v="summary">4. Change list</button>
-    <a id="calcLink" href="https://delooze29-stack.github.io/nightcheck/calculator.html" target="_blank" rel="noopener" style="color:#fff;opacity:.85;font-size:14px;align-self:center;margin-left:8px">Oversize calculator ↗</a>
+    <button id="calcBtn" type="button" style="border:1px solid rgba(255,255,255,.5);background:transparent;color:#fff;border-radius:6px;padding:8px 12px;font:inherit;font-weight:600;cursor:pointer;margin-left:6px">Oversize calculator</button>
   </nav>
 </header>
 <main>
@@ -284,6 +294,30 @@
   </div>
 </section>
 </main>
+<div id="calcModal" class="modal" hidden><div class="mbox" style="max-width:720px">
+  <div class="row" style="justify-content:space-between"><h2 style="margin:0">Oversize price calculator</h2><button class="btn" id="calcClose">Close</button></div>
+  <div class="calcgrid">
+    <div>
+      <label class="clab" for="cPrice">Price showing now (£) – including anything ticked</label>
+      <input type="number" id="cPrice" step="0.01" inputmode="decimal" placeholder="e.g. 85.00">
+      <label class="clab">Size (cm) and weight (kg)</label>
+      <div class="c4"><input type="number" id="cL" placeholder="Length" inputmode="decimal"><input type="number" id="cW" placeholder="Width" inputmode="decimal"><input type="number" id="cH" placeholder="Height" inputmode="decimal"><input type="number" id="cKg" placeholder="Kg" inputmode="decimal"></div>
+      <label class="clab">What's ticked on the consignment?</label>
+      <div class="ex" id="cExtras"></div>
+      <button class="btn" id="cClear" style="margin-top:10px">Clear</button>
+    </div>
+    <div>
+      <div class="hint">New charge</div>
+      <div id="cTotal" class="ctotal">–</div>
+      <div id="cSub" class="hint" style="margin-bottom:6px">Enter the price and the pallet's size.</div>
+      <div id="cWarn"></div>
+      <table id="cBreak" class="cbreak"></table>
+      <div id="cKey" style="margin-top:8px"></div>
+    </div>
+  </div>
+  <details style="margin-top:12px"><summary class="hint" style="cursor:pointer">SK oversize rates table</summary><div class="scroll"><table id="cRef" class="cref"></table></div>
+    <p class="hint">Front-facing = longest side, depth = shorter side. Overweight: up to 1200kg 100% · 1201–1300 135% · 1301–1400 170% · 1401–1500 195% · over 1500 POA. Both together: the extra percentages are added.</p></details>
+</div></div>
 <div id="skModal" class="modal" hidden><div class="mbox">
   <div class="row" style="justify-content:space-between"><h2 style="margin:0" id="skTitle">Oversize price</h2><button class="btn" id="skClose">Close</button></div>
   <div id="skBody"></div>
@@ -1000,8 +1034,51 @@ if (window.claude && window.claude.use){
 }
 document.getElementById('photoBtn').addEventListener('click',()=>document.getElementById('photoIn').click());
 /* ---------- Night file: save / load the whole night as a small .json file ---------- */
-// Calculator link: use the copy next to this file (shared drive / GitHub), otherwise the GitHub one.
-if (location.protocol==='file:' || location.hostname.endsWith('github.io')) document.getElementById('calcLink').href='calculator.html';
+/* ---------- Oversize price calculator (pop-up) ---------- */
+{
+  const $=id=>document.getElementById(id);
+  $('cExtras').innerHTML=EXTRAS.map(([k,t,v])=>`<label><input type="checkbox" data-k="${k}"> ${t} <span class="hint">£${v}</span></label>`).join('');
+  const drawRef=(front,depth)=>{
+    const head=['Depth ↓ / Front →','≤120','121–180','181–210','211–240','241–300','301–330','331–360','361–420','421–450','451–480','481–540','541–570','571–600'];
+    const ci=front?OS_COLS.findIndex(c=>Math.ceil(front)<=c):-1, ri=depth?(Math.ceil(depth)<=120?0:Math.ceil(depth)<=240?1:-1):-1;
+    const row=(lab,vals,r)=>`<tr><th>${lab}</th>${OS_COLS.map((c,i)=>`<td class="${r===ri&&i===ci?'on':''}">${vals[i]!=null?vals[i]+'%':'POA'}</td>`).join('')}</tr>`;
+    $('cRef').innerHTML=`<tr>${head.map(h=>`<th>${h}</th>`).join('')}</tr>`+row('≤120',OS_D120,0)+row('121–240',OS_D240,1);
+  };
+  const calc=()=>{
+    const price=parseFloat($('cPrice').value), L=parseFloat($('cL').value), W=parseFloat($('cW').value), H=parseFloat($('cH').value), kg=parseFloat($('cKg').value)||0;
+    const flags={}; document.querySelectorAll('#cExtras input').forEach(cb=>flags[cb.dataset.k]=cb.checked);
+    const ext=EXTRAS.reduce((t,[k,,v])=>t+(flags[k]?v:0),0);
+    const warn=[], show=()=>$('cWarn').innerHTML=warn.map(w=>`<div class="cwarn">${w}</div>`).join('');
+    $('cBreak').innerHTML=''; $('cKey').innerHTML='';
+    drawRef(L&&W?Math.max(L,W):0, L&&W?Math.min(L,W):0);
+    if (!(L>0&&W>0)){ $('cTotal').textContent='–'; $('cSub').textContent='Enter the price and the pallet’s size.'; show(); return; }
+    const sk=skPct(L,W,kg);
+    if (H>0){ const r=classify(L,W,H,kg||1); if(r.err) warn.push(`Height ${H}cm is over the 220cm maximum – check it (in cm).`); else $('cKey').innerHTML=`Key on Palletways as <span class="pill chg">${r.units.map(code).join(' + ')}</span>`; r.warn.forEach(w=>warn.push(w)); }
+    sk.notes.forEach(n=>warn.push(n));
+    if (sk.pct==='POA'){ $('cTotal').textContent='POA'; $('cSub').textContent='Price on application for this size or weight.'; show(); return; }
+    if (!(price>0)){ $('cTotal').textContent=sk.pct+'%'; $('cSub').textContent='Enter the price showing to see the charge.'; show(); return; }
+    if (price<=ext){ $('cTotal').textContent='–'; $('cSub').textContent=''; warn.unshift(`The price (${gbp(price)}) is less than the extras ticked (${gbp(ext)}), so it can’t include them. Check the price and what’s ticked.`); show(); return; }
+    const base=price-ext, up=base*sk.pct/100, total=up+ext;
+    const parts=[sk.os!==100?`oversize ${sk.os}%`:'', sk.ow!==100?`overweight ${sk.ow}%`:''].filter(Boolean).join(' + ')||'no surcharge';
+    const exList=EXTRAS.filter(([k])=>flags[k]).map(([,t,v])=>`${t} £${v}`).join(' + ');
+    $('cTotal').textContent=gbp(total);
+    $('cSub').textContent = sk.pct===100 ? 'Not oversize or overweight – normal price.' : 'Extras taken off, % applied, extras put back on.';
+    $('cBreak').innerHTML=`<tr><td>Price showing now</td><td class="r">${gbp(price)}</td></tr>`+
+      `<tr><td>− ticked extras <span class="hint">${exList||'none'}</span></td><td class="r">−${gbp(ext)}</td></tr>`+
+      `<tr><td>= pallet price on its own</td><td class="r">${gbp(base)}</td></tr>`+
+      `<tr><td>× ${sk.pct}% <span class="hint">(${parts})</span></td><td class="r">${gbp(up)}</td></tr>`+
+      `<tr><td>+ extras back on</td><td class="r">+${gbp(ext)}</td></tr>`+
+      `<tr class="tot"><td>New charge</td><td class="r">${gbp(total)}</td></tr>`+
+      (total>price?`<tr><td class="hint">On top of the current price</td><td class="r hint">+${gbp(total-price)}</td></tr>`:'');
+    show();
+  };
+  document.querySelectorAll('#calcModal input').forEach(i=>i.addEventListener('input',calc));
+  $('cClear').addEventListener('click',()=>{ ['cPrice','cL','cW','cH','cKg'].forEach(id=>$(id).value=''); document.querySelectorAll('#cExtras input').forEach(c=>c.checked=false); calc(); $('cPrice').focus(); });
+  $('calcBtn').addEventListener('click',()=>{ $('calcModal').hidden=false; calc(); $('cPrice').focus(); });
+  $('calcClose').addEventListener('click',()=>$('calcModal').hidden=true);
+  $('calcModal').addEventListener('click',e=>{ if(e.target.id==='calcModal') $('calcModal').hidden=true; });
+  document.addEventListener('keydown',e=>{ if(e.key==='Escape') $('calcModal').hidden=true; });
+}
 let dlCap=null;
 { const o=document.getElementById('oddAcc'); o.value=state.oddball??'JC999, ODDBALL JOBS';
   o.addEventListener('change',()=>{ state.oddball=o.value; save(); renderAll(); }); }
