@@ -37,6 +37,11 @@
   .stat{background:#fff;border:1px solid var(--line);border-radius:8px;padding:10px 14px;min-width:130px}
   .stat b{display:block;font-size:24px}
   .view{display:none}.view.on{display:block}
+  .drop{display:block;border:2px dashed var(--teal);border-radius:10px;padding:18px;text-align:center;cursor:pointer;background:#f3fafc;margin:6px 0}
+  .drop.over{background:#dff1f6}
+  .drop input{display:none}
+  .drop b{display:block;font-size:16px;color:var(--navy);margin-bottom:4px}
+  .drop span{font-size:13px;color:var(--muted)}
   .sumline{font-size:13px;margin:4px 0 8px;line-height:1.5}
   .sumt{width:100%;border-collapse:collapse;font-size:13px;table-layout:fixed}
   .sumt th{padding:3px 4px}
@@ -165,19 +170,24 @@
   <div class="card">
     <div class="row" style="justify-content:space-between"><h2 style="margin:0">Load tonight's exports</h2>
       <span><button class="btn" id="newNight">Start a new night</button> <button class="btn solid" id="newNightYes" style="display:none;background:#b3261e;border-color:#b3261e">Yes – clear everything</button></span></div>
-    <p class="hint">Load the Consignment Analysis CSVs from the Palletways Portal. They stay in this browser only. You can load one or both.</p>
+    <label class="drop" id="drop">
+      <input type="file" id="allFiles" accept=".csv,text/csv" multiple>
+      <b>Choose or drop tonight's export files here</b>
+      <span>Palletways "Our customers", Palletways "Depot collections" and the Pallex (Nexus) export – any order, one or all at once. Night Check works out which is which. They stay in this browser only.</span>
+    </label>
+    <div id="dropMsg" class="hint" style="margin-top:6px"></div>
     <div class="src"><h3>Our customers <span class="hint">– check and re-charge</span></h3>
-      <div class="row"><input type="file" class="fileIn" data-src="cust" accept=".csv,text/csv">
+      <div class="row"><input type="file" class="fileIn" data-src="cust" accept=".csv,text/csv" hidden>
       <label class="hint"><input type="checkbox" id="hideZero"> Hide £0 consignments</label></div>
       <div id="filters-cust" class="row" style="margin-top:8px"></div>
       <div class="row" style="margin-top:8px"><label class="hint">Oddball account(s) <input type="text" id="oddAcc" style="width:220px;display:inline-block;padding:4px"></label>
         <span class="hint">Left out unless the delivery depot isn't ours and there's a price on it.</span></div>
       <div id="info-cust" class="hint" style="margin-top:6px"></div></div>
     <div class="src"><h3>Pallex <span class="hint">– Nexus consignment export · check against the dims the customer entered</span></h3>
-      <div class="row"><input type="file" class="fileIn" data-src="pallex" accept=".csv,text/csv"></div>
+      <div class="row"><input type="file" class="fileIn" data-src="pallex" accept=".csv,text/csv" hidden></div>
       <div id="filters-pallex" class="row" style="margin-top:8px"></div><div id="info-pallex" class="hint" style="margin-top:6px"></div></div>
     <div class="src"><h3>Depot collections <span class="hint">– check the keyed pallet type only</span></h3>
-      <div class="row"><input type="file" class="fileIn" data-src="depot" accept=".csv,text/csv"></div>
+      <div class="row"><input type="file" class="fileIn" data-src="depot" accept=".csv,text/csv" hidden></div>
       <div id="filters-depot" class="row" style="margin-top:8px"></div><div id="info-depot" class="hint" style="margin-top:6px"></div></div>
     <div id="loadInfo" class="hint" style="margin-top:10px"></div>
   </div>
@@ -811,6 +821,30 @@ document.getElementById('nav').addEventListener('click',e=>{
   if (b.dataset.v==='check') renderCheck();
   if (b.dataset.v==='summary') renderSummary();
 });
+// Work out which export a file is from its column headings.
+function detectExport(text){
+  const head=(parseCSV(text.slice(0,4000))[0]||[]).map(h=>h.trim().toLowerCase());
+  if (head.includes('consignment number') && head.some(h=>h.startsWith('dimensions'))) return 'pallex';
+  if (head.includes('con no') && head.includes('billing units')) return head.includes('customer name') ? 'cust' : 'depot';
+  return null;
+}
+async function loadFiles(files){
+  const msg=document.getElementById('dropMsg'), out=[], seen={};
+  for (const f of files){
+    const text=await f.text(); const src=detectExport(text);
+    if (!src){ out.push(`<span class="warn">${esc(f.name)}: not a Palletways or Pallex export</span>`); continue; }
+    if (seen[src]) out.push(`<span class="warn">${esc(f.name)}: a second ${SRC_NAME[src]} file – it replaced ${esc(seen[src])}</span>`);
+    seen[src]=f.name; loadCSV(text, f.name, src);
+    out.push(`${esc(f.name)} → <b>${SRC_NAME[src]}</b>`);
+  }
+  msg.innerHTML=out.join('<br>');
+}
+{ const d=document.getElementById('drop'), inp=document.getElementById('allFiles');
+  inp.addEventListener('change',()=>{ loadFiles([...inp.files]); inp.value=''; });
+  ['dragenter','dragover'].forEach(ev=>d.addEventListener(ev,e=>{ e.preventDefault(); d.classList.add('over'); }));
+  ['dragleave','drop'].forEach(ev=>d.addEventListener(ev,e=>{ e.preventDefault(); d.classList.remove('over'); }));
+  d.addEventListener('drop',e=>{ if(e.dataTransfer?.files?.length) loadFiles([...e.dataTransfer.files]); });
+}
 document.querySelectorAll('.fileIn').forEach(inp=>inp.addEventListener('change',e=>{
   const f=e.target.files[0]; if(!f) return; const rd=new FileReader();
   rd.onload=()=>loadCSV(rd.result,f.name,inp.dataset.src); rd.readAsText(f);
