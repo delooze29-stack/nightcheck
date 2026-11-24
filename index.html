@@ -164,7 +164,7 @@
     <button data-v="sheet">2. Print sheet</button>
     <button data-v="check">3. Check &amp; change</button>
     <button data-v="summary">4. Change list</button>
-    <a href="https://delooze29-stack.github.io/nightcheck/calculator.html" target="_blank" rel="noopener" style="color:#fff;opacity:.85;font-size:14px;align-self:center;margin-left:8px">Oversize calculator ↗</a>
+    <a id="calcLink" href="https://delooze29-stack.github.io/nightcheck/calculator.html" target="_blank" rel="noopener" style="color:#fff;opacity:.85;font-size:14px;align-self:center;margin-left:8px">Oversize calculator ↗</a>
   </nav>
 </header>
 <main>
@@ -1000,6 +1000,8 @@ if (window.claude && window.claude.use){
 }
 document.getElementById('photoBtn').addEventListener('click',()=>document.getElementById('photoIn').click());
 /* ---------- Night file: save / load the whole night as a small .json file ---------- */
+// Calculator link: use the copy next to this file (shared drive / GitHub), otherwise the GitHub one.
+if (location.protocol==='file:' || location.hostname.endsWith('github.io')) document.getElementById('calcLink').href='calculator.html';
 let dlCap=null;
 { const o=document.getElementById('oddAcc'); o.value=state.oddball??'JC999, ODDBALL JOBS';
   o.addEventListener('change',()=>{ state.oddball=o.value; save(); renderAll(); }); }
