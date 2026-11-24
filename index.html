@@ -268,7 +268,7 @@
 <section class="view" id="v-summary">
   <div class="card noprint"><div class="row" style="justify-content:space-between">
     <span class="hint">Everything to change on Palletways tonight, in one list. Work down it and tick each one off.</span>
-    <div class="row"><select class="sumLayout" style="font:inherit;padding:6px"><option value="portrait">Portrait</option><option value="landscape">Landscape</option></select><button class="btn" id="saveNight2">Save night file</button><button class="btn" id="copyBtn2">Copy list</button><button class="btn solid" id="printSum">Print list</button></div></div></div>
+    <div class="row"><select class="chgScope" style="font:inherit;padding:6px"><option value="all">All changes</option><option value="new">Only new since last print</option></select> <select class="sumLayout" style="font:inherit;padding:6px"><option value="portrait">Portrait</option><option value="landscape">Landscape</option></select><button class="btn" id="saveNight2">Save night file</button><button class="btn" id="copyBtn2">Copy list</button><button class="btn solid" id="printSum">Print list</button></div></div></div>
   <div class="card" id="summary"></div>
 </section>
 
@@ -283,7 +283,7 @@
         <span id="photoMsg" class="hint"></span>
       </div>
       <div class="row">
-        <button class="btn" id="printChg">Print change list</button> <select class="sumLayout" style="font:inherit;padding:6px"><option value="portrait">Portrait</option><option value="landscape">Landscape</option></select>
+        <button class="btn" id="printChg">Print change list</button> <select class="chgScope" style="font:inherit;padding:6px"><option value="all">All changes</option><option value="new">Only new since last print</option></select> <select class="sumLayout" style="font:inherit;padding:6px"><option value="portrait">Portrait</option><option value="landscape">Landscape</option></select>
         <label class="hint"><input type="checkbox" id="onlyChg"> Only show cons to change</label>
         <button class="btn" id="copyBtn">Copy change list</button>
       </div>
@@ -815,7 +815,12 @@ function renderSummary(){
   const el=document.getElementById('summary');
   if (!G.length){ el.innerHTML='<p class="hint">Load an export on step 1 first.</p>'; return; }
   const todo=r=>['up','down','chg'].includes(r.status);
-  const cust=res.filter(r=>PAID(r.c)&&todo(r)), dep=res.filter(r=>r.c.src==='depot'&&todo(r));
+  const printed=state.printedChg||{}, onlyNew=state.chgScope==='new';
+  const fresh=r=>printed[r.c.id]!==chgSig(r);
+  let cust=res.filter(r=>PAID(r.c)&&todo(r)), dep=res.filter(r=>r.c.src==='depot'&&todo(r));
+  const nNew=cust.concat(dep).filter(fresh).length;
+  document.querySelectorAll('.chgScope option[value=new]').forEach(o=>o.textContent=`Only new since last print (${nNew})`);
+  if (onlyNew){ cust=cust.filter(fresh); dep=dep.filter(fresh); }
   const left=res.filter(r=>r.status==='none'||r.status==='part'), ok=res.filter(r=>r.status==='ok');
   const ex=cust.map(extraRev); window._extra={total:ex.filter(v=>v>0).reduce((a,b)=>a+b,0), missing:ex.filter(v=>v===undefined).length};
   const SHORT={up:'Under',down:'Over',chg:'Check'};
@@ -834,7 +839,7 @@ function renderSummary(){
   const byCust=[]; cust.forEach(r=>{ const nm=r.c.cust+(r.c.src==='pallex'?' (Pallex)':''); const g=byCust.find(g=>g.name===nm); if(g) g.rs.push(r); else byCust.push({name:nm, rs:[r]}); });
   byCust.sort((a,b)=>a.name.localeCompare(b.name));
   el.innerHTML = `
-    <div class="sh-top" style="margin-bottom:6px"><div><b>Night Check – change list</b> <span>${new Date().toLocaleDateString('en-GB')}</span></div>
+    <div class="sh-top" style="margin-bottom:6px"><div><b>Night Check – change list${onlyNew?' (new since last print)':''}</b> <span>${new Date().toLocaleDateString('en-GB')}${onlyNew?' '+new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}):''}</span></div>
       <div class="sh-sign">Keyed by <span class="line"></span></div></div>
     <div class="sumline"><b>Extra revenue ${gbp(window._extra.total)}</b>${window._extra.missing?` <span class="hint">(${window._extra.missing} need a new price)</span>`:''}
       · To change <b>${cust.length}</b> · Depot cols wrong <b>${dep.length}</b> · Correct <b>${ok.length}</b> · Still to measure <b>${left.length}</b> · ${G.length} cons checked</div>
@@ -992,14 +997,18 @@ document.getElementById('check').addEventListener('keydown',e=>{
   if (all[j]){ all[j].focus(); all[j].select(); }
 });
 document.getElementById('copyBtn2').addEventListener('click',()=>document.getElementById('copyBtn').click());
+function chgSig(r){ return [r.status, r.pallex?pxChanges(r).join(';'):buStr(r.should||{}), (r.special||[]).map(l=>l.sk.pct).join(',')].join('|'); }
 function printSummary(){
   renderSummary();
   const ps=document.getElementById('pageStyle'), old=ps.textContent;
   ps.textContent=`@page{size:A4 ${sumLayout};margin:${sumLayout==='landscape'?'8mm':'10mm'}}`; document.body.classList.add('ps');
   try{ window.print(); }catch(e){}
   setTimeout(()=>{ document.body.classList.remove('ps'); ps.textContent=old; },500);
+  state.printedChg=state.printedChg||{}; (window._sum?[...window._sum.cust,...window._sum.dep]:[]).forEach(r=>state.printedChg[r.c.id]=chgSig(r)); save();
 }
 document.getElementById('printSum').addEventListener('click',printSummary);
+document.querySelectorAll('.chgScope').forEach(sel=>{ sel.value=state.chgScope||'all'; sel.addEventListener('change',()=>{
+  state.chgScope=sel.value; save(); document.querySelectorAll('.chgScope').forEach(o=>o.value=state.chgScope); renderSummary(); }); });
 document.querySelectorAll('.sumLayout').forEach(sel=>{ sel.value=sumLayout; sel.addEventListener('change',()=>{
   sumLayout=sel.value; try{ localStorage.setItem('nc-sumLayout',sumLayout); }catch(e){}
   document.querySelectorAll('.sumLayout').forEach(o=>o.value=sumLayout); renderSummary(); }); });
