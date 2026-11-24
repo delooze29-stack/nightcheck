@@ -96,6 +96,7 @@
   .cs td.se{background:#fff;border-left:1.5px solid #000}
   .cs tr.gap td{height:2.2mm;border:0;padding:0}
   .cs tr.gap + tr td{border-top:2px solid #000}
+  .cs .tag3{font-size:9px;line-height:1.05;font-weight:600;white-space:normal}
   .cs td.sub{color:#555;font-size:9.5px}
   .cs tr{break-inside:avoid;page-break-inside:avoid}
   .cs thead{display:table-header-group}
@@ -172,6 +173,9 @@
       <div class="row" style="margin-top:8px"><label class="hint">Oddball account(s) <input type="text" id="oddAcc" style="width:220px;display:inline-block;padding:4px"></label>
         <span class="hint">Left out unless the delivery depot isn't ours and there's a price on it.</span></div>
       <div id="info-cust" class="hint" style="margin-top:6px"></div></div>
+    <div class="src"><h3>Pallex <span class="hint">– Nexus consignment export · check against the dims the customer entered</span></h3>
+      <div class="row"><input type="file" class="fileIn" data-src="pallex" accept=".csv,text/csv"></div>
+      <div id="filters-pallex" class="row" style="margin-top:8px"></div><div id="info-pallex" class="hint" style="margin-top:6px"></div></div>
     <div class="src"><h3>Depot collections <span class="hint">– check the keyed pallet type only</span></h3>
       <div class="row"><input type="file" class="fileIn" data-src="depot" accept=".csv,text/csv"></div>
       <div id="filters-depot" class="row" style="margin-top:8px"></div><div id="info-depot" class="hint" style="margin-top:6px"></div></div>
@@ -321,7 +325,7 @@ function skPct(L,W,kg){
 }
 
 /* ================= State ================= */
-const DEF_FILTER = () => ({cust:{depot:'59',statuses:['AT COLLECTION DEPOT','IN COLLECTION DEPOT','IN MY DEPOT','NOT BARCODED']},
+const DEF_FILTER = () => ({pallex:{depot:'',statuses:[]}, cust:{depot:'59',statuses:['AT COLLECTION DEPOT','IN COLLECTION DEPOT','IN MY DEPOT','NOT BARCODED']},
                            depot:{depot:'59',statuses:['REQUESTED','IN MY DEPOT','ACCEPTED','AWAITING ACCEPTANCE']}});
 let state = {rows:[], m:{}, files:{}, filter:DEF_FILTER()};
 try { const s = JSON.parse(localStorage.getItem('nightcheck2')||'null'); if (s && s.rows && s.filter && s.filter.cust) state = s; } catch(e){}
@@ -329,7 +333,9 @@ state.filter = DEF_FILTER();
 if (state.oddball==='JS049, PALLETTS') delete state.oddball;
 state.removed = state.removed || {};
 const save = () => { try{ localStorage.setItem('nightcheck2', JSON.stringify(state)); }catch(e){} };
-const SRC_NAME = {cust:'Our customers', depot:'Depot collections'};
+const SRC_NAME = {cust:'Our customers', pallex:'Pallex', depot:'Depot collections'};
+const SRCS=['cust','pallex','depot'];
+const PAID = c => c && (c.src==='cust' || c.src==='pallex');   // jobs we charge for (revenue protection)
 
 function parseCSV(text){
   const out=[]; let row=[], f='', q=false;
@@ -354,7 +360,39 @@ const buStr = o => Object.keys(o).sort((a,b)=>T[b]?.rank-T[a]?.rank).map(k=>`${c
 const esc = s => String(s??'').replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const gbp = n => '£'+(+n).toFixed(2);
 
+// Pallex (Nexus) consignment export: one row per consignment, pallet counts in separate columns,
+// customer's own dims per pallet in "Dimensions (Size|L|W|H|W)" like (HALF|1.20|0.80|1.20|100.00) – metres and kg.
+const PX_TYPES=[['megafull pallets','MF'],['full pallets','F'],['fulllight pallets','FL'],['half pallets','H'],['quarter pallets','Q'],['miniquarter pallets','MQ'],['oversize pallets','OS'],['megafulllong pallets','MFL']];
+function parsePxDims(s){ return [...String(s||'').matchAll(/\(([^|()]*)\|([\d.]+)\|([\d.]+)\|([\d.]+)\|([\d.]+)\)/g)]
+  .map(m=>({type:m[1].trim().toUpperCase(), L:Math.round(+m[2]*100), W:Math.round(+m[3]*100), H:Math.round(+m[4]*100), kg:+m[5]})); }
+const pxDim = d => d ? `${d.type?d.type+' ':''}${d.L}×${d.W}×${d.H}${d.kg?' '+d.kg+'kg':''}` : '';
+function loadPallex(text, name){
+  const rows=parseCSV(text); const head=rows.shift().map(h=>h.trim().toLowerCase());
+  const col=k=>head.indexOf(k);
+  const ix={con:col('consignment number'),acc:col('customer account'),cname:col('collection point name'),colPc:col('collection point postcode'),
+    pc:col('delivery point postcode'),kg:col('weight'),rev:col('customer price'),colDep:col('collecting depot'),dep:col('delivering depot'),
+    local:col('local depot'),dims:col('dimensions (size|l|w|h|w)'),svc:col('delivery service'),due:col('delivery date')};
+  if (ix.con<0||ix.dims<0){ alert('That doesn’t look like a Pallex (Nexus) consignment export.'); return; }
+  const g=(r,k)=>ix[k]>=0?(r[ix[k]]||'').trim():'';
+  let notOurs=0;
+  const fresh=[];
+  rows.forEach((r,i)=>{
+    if (g(r,'local') && g(r,'colDep') && g(r,'local')!==g(r,'colDep')){ notOurs++; return; }   // only jobs we collected
+    const counts=PX_TYPES.map(([h,c])=>[c, parseInt(r[head.indexOf(h)])||0]).filter(([,n])=>n>0);
+    const decl=parsePxDims(g(r,'dims'));
+    const lifts=Math.max(1, decl.length, counts.reduce((t,[,n])=>t+n,0));
+    fresh.push({id:'pallex'+i, src:'pallex', con:g(r,'con'), cust:g(r,'cname')||g(r,'acc'), code:g(r,'acc'),
+      bu:counts.map(([c,n])=>`${c}-${n}`).join(','), pc:g(r,'pc').toUpperCase(), colPc:g(r,'colPc').toUpperCase(),
+      rev:parseFloat(g(r,'rev'))||0, lifts, kg:parseFloat(g(r,'kg'))||0, dep:g(r,'dep'), colDep:g(r,'colDep'),
+      status:'', svc:g(r,'svc'), due:g(r,'due'), hub:'', decl});
+  });
+  state.rows = state.rows.filter(r=>r.src!=='pallex').concat(fresh);
+  state.removed = Object.fromEntries(Object.entries(state.removed||{}).filter(([k])=>!k.startsWith('pallex')));
+  state.files.pallex=name; state.pxSkipped=notOurs; state.m={};
+  save(); renderAll();
+}
 function loadCSV(text, name, src){
+  if (src==='pallex') return loadPallex(text, name);
   const rows = parseCSV(text); const head = rows.shift().map(h=>h.trim().toLowerCase());
   const col = (...ks) => { for (const k of ks){ const i=head.indexOf(k); if(i>=0) return i; } return -1; };
   const ix = {con:col('con no'),cust:col('customer name','customer'),code:head.indexOf('customer name')>=0?col('customer'):-1,
@@ -383,17 +421,17 @@ function liftList(ignorePick){
   const pick = ignorePick ? {} : (state.pick||{});
   const hide = document.getElementById('hideZero').checked;
   const out=[]; let n=1;
-  ['cust','depot'].forEach(src=>{
-    const f = state.filter[src];
+  SRCS.forEach(src=>{
+    const f = state.filter[src]||{};
     state.rows.filter(c => c.src===src
       && !(src==='cust' && hide && !c.rev)
       && !(src==='cust' && oddLeftOut(c))
       && !state.removed?.[c.id]
-      && !(src==='cust' && pick.cust && pick.cust[c.cust])
+      && !(src!=='depot' && pick.cust && pick.cust[c.cust])
       && !(src==='depot' && pick.depot)
       && !(f.depot && c.colDep && c.colDep !== f.depot)
-      && !(c.status && !f.statuses.includes(c.status)))
-    .sort((a,b)=> (a.ord!=null&&b.ord!=null) ? a.ord-b.ord : src==='cust' ? (a.cust.localeCompare(b.cust) || a.con.localeCompare(b.con)) : (a.colPc.localeCompare(b.colPc) || a.con.localeCompare(b.con)))
+      && !(c.status && f.statuses && f.statuses.length && !f.statuses.includes(c.status)))
+    .sort((a,b)=> (a.ord!=null&&b.ord!=null) ? a.ord-b.ord : src!=='depot' ? (a.cust.localeCompare(b.cust) || a.con.localeCompare(b.con)) : (a.colPc.localeCompare(b.colPc) || a.con.localeCompare(b.con)))
     .forEach(c => { for (let l=1;l<=c.lifts;l++) out.push({n:n++, c, l}); });
   });
   return out;
@@ -405,10 +443,10 @@ function renderLoadInfo(){
   const el=document.getElementById('loadInfo');
   if (!state.rows.length){ el.textContent='Nothing loaded yet.'; return; }
   el.innerHTML = `Sheet will show <b>${new Set(L.map(x=>x.c.id)).size}</b> cons / <b>${L.length}</b> lifts.`;
-  ['cust','depot'].forEach(src=>{
+  SRCS.forEach(src=>{
     const rows=state.rows.filter(r=>r.src===src), sel=L.filter(x=>x.c.src===src);
     document.getElementById('info-'+src).innerHTML = rows.length
-      ? `Loaded <b>${esc(state.files[src])}</b> (${rows.length} cons) → ${new Set(sel.map(x=>x.c.id)).size} cons / ${sel.length} lifts on the sheet.${src==='cust'?(()=>{const f=state.filter.cust; const n=rows.filter(c=>oddLeftOut(c) && !(f.depot&&c.colDep&&c.colDep!==f.depot) && !(c.status&&!f.statuses.includes(c.status))).length; return n?` ${n} oddball job(s) left out.`:'';})():''} <a href="#" class="clr" data-src="${src}">Clear</a>`
+      ? `Loaded <b>${esc(state.files[src])}</b> (${rows.length} cons) → ${new Set(sel.map(x=>x.c.id)).size} cons / ${sel.length} lifts on the sheet.${src==='cust'?(()=>{const f=state.filter.cust; const n=rows.filter(c=>oddLeftOut(c) && !(f.depot&&c.colDep&&c.colDep!==f.depot) && !(c.status&&!f.statuses.includes(c.status))).length; return n?` ${n} oddball job(s) left out.`:'';})():''} ${src==='pallex'&&state.pxSkipped?` ${state.pxSkipped} not collected by us – left out.`:''} <a href="#" class="clr" data-src="${src}">Clear</a>`
       : 'Not loaded.';
   });
 }
@@ -426,22 +464,22 @@ function compactSheet(groups,lifts,d){
   const cols=`<colgroup><col style="width:7mm"><col style="width:26mm"><col style="width:24mm"><col style="width:17mm"><col style="width:19mm"><col style="width:10mm"><col style="width:13mm"><col style="width:8mm">
       <col style="width:14mm"><col style="width:12mm"><col style="width:12mm"><col style="width:12mm"><col style="width:12mm"><col style="width:6mm"></colgroup>`;
   const table = (src, gs) => `<table class="cs" style="margin-top:6px">${cols}
-    <thead><tr class="sec"><td colspan="14">${SRC_NAME[src].toUpperCase()} – ${src==='cust'?'measure and check the charge':'check the pallet type the depot keyed'}</td></tr>
-    <tr><th>Row</th><th>Con No</th><th>${src==='cust'?'Customer':'Collect from'}</th><th>Del PC</th><th>Declared</th><th>Con kg</th><th>£</th><th>Lift</th><th>S / E</th><th>L</th><th>W</th><th>H</th><th>KG</th><th>✔</th></tr></thead><tbody>
+    <thead><tr class="sec"><td colspan="14">${SRC_NAME[src].toUpperCase()} – ${src==='cust'?'measure and check the charge':src==='pallex'?'measure and check against the dims the customer entered':'check the pallet type the depot keyed'}</td></tr>
+    <tr><th>Row</th><th>Con No</th><th>${src==='depot'?'Collect from':'Customer'}</th><th>Del PC</th><th>${src==='pallex'?'Entered':'Declared'}</th><th>Con kg</th><th>£</th><th>Lift</th><th>S / E</th><th>L</th><th>W</th><th>H</th><th>KG</th><th>✔</th></tr></thead><tbody>
     ${gs.map((g,gi)=>g.l.map((x,i)=>{ const c=g.c;
       const who = c.src==='depot' ? esc(c.colPc) : esc(c.cust);
       const info = i===0
-        ? `<td class="c">${esc(c.con)}</td><td class="cu">${who}</td><td>${esc(c.pc)}</td><td class="m"><b>${esc(c.bu)}</b>${svcTag(c)?`<div class="tag2">${svcTag(c)}</div>`:''}</td><td class="m">${c.kg}</td><td class="m">${c.src==='cust'?gbp(c.rev).slice(1):'–'}</td>`
-        : `<td></td><td></td><td></td><td></td><td></td><td></td>`;
+        ? `<td class="c">${esc(c.con)}</td><td class="cu">${who}</td><td>${esc(c.pc)}</td><td class="m">${c.src==='pallex'?`<span class="tag3">${esc(pxDim(c.decl?.[0])||c.bu)}</span>`:`<b>${esc(c.bu)}</b>`}${svcTag(c)?`<div class="tag2">${svcTag(c)}</div>`:''}</td><td class="m">${c.kg}</td><td class="m">${PAID(c)?gbp(c.rev).slice(1):'–'}</td>`
+        : `<td></td><td></td><td></td>${c.src==='pallex'?`<td class="m tag3">${esc(pxDim(c.decl?.[i]))}</td>`:'<td></td>'}<td></td><td></td>`;
       const dd=sizeDefault(c), pre=v=>dd?`<span class="pre">${v}</span>`:'';
-      const gap = (i===0 && gi>0 && c.src==='cust' && gs[gi-1].c.cust!==c.cust) ? '<tr class="gap"><td colspan="14"></td></tr>' : '';
+      const gap = (i===0 && gi>0 && c.src!=='depot' && gs[gi-1].c.cust!==c.cust) ? '<tr class="gap"><td colspan="14"></td></tr>' : '';
       return `${gap}<tr class="${i===0?'first':''}"><td class="n">${x.n}</td>${info}<td class="m">${x.l}/${c.lifts}</td><td class="w se"></td><td class="w">${pre(dd&&dd.L)}</td><td class="w">${pre(dd&&dd.W)}</td><td class="w"></td><td class="w"></td><td></td></tr>`;
     }).join('')).join('')}</tbody></table>`;
   return `<div class="sh-top"><div><b>SK Distribution – Night measure sheet</b><br>
       <span>Collecting depot ${esc(state.filter.cust.depot||state.filter.depot.depot||'all')} · ${groups.length} cons · ${lifts} lifts · cm / kg</span></div>
       <div class="sh-sign">Date <span class="line">${d}</span> Measured by <span class="line"></span></div></div>
     <div class="sh-key">Standard or euro with no overhang: just write <b>S</b> or <b>E</b> + height in the S / E box (e.g. <b>S70</b>, <b>E80</b>). Oversize: write full <b>L, W, H</b>. KG only if different to booked. <b>All lifts the same?</b> Fill in the first lift, then write <b>SAME</b> (or draw a line down) on the others.</div>
-    ${['cust','depot'].map(src=>{ const gs=groups.filter(g=>g.c.src===src); return gs.length?table(src,gs):''; }).join('')}`;
+    ${SRCS.map(src=>{ const gs=groups.filter(g=>g.c.src===src); return gs.length?table(src,gs):''; }).join('')}`;
 }
 function renderSheet(){
   const L=liftList(); const d=new Date().toLocaleDateString('en-GB');
@@ -460,7 +498,7 @@ function renderSheet(){
     ${groups.map((g,gi)=>{ const c=g.c; return `${(gi===0||groups[gi-1].c.src!==c.src)?`<h3 class="sec-h">${SRC_NAME[c.src]}</h3>`:''}<div class="con${g.l.length>4?' big':''}">
       <div class="con-h">
         <div class="con-no">${esc(c.con)}</div>
-        <div class="con-cust"><b>${c.src==='depot'?'Depot collection':esc(c.cust)}</b>${c.code&&c.code!==c.cust?` <span>${esc(c.code)}</span>`:''}<br>
+        <div class="con-cust"><b>${c.src==='depot'?'Depot collection':esc(c.cust)}${c.src==='pallex'?' <span>(Pallex)</span>':''}</b>${c.code&&c.code!==c.cust?` <span>${esc(c.code)}</span>`:''}<br>
           <span>${c.colPc?esc(c.colPc)+' → ':''}${esc(c.pc)}${c.dep?' · Depot '+esc(c.dep):''}${c.svc?' · '+esc(c.svc):''}${c.due?' · Due '+esc(c.due):''}</span></div>
         <div class="con-dec w"><span>Declared</span><b>${esc(c.bu)}</b></div>
         <div class="con-dec"><span>Lifts</span><b>${c.lifts}</b></div>
@@ -469,7 +507,7 @@ function renderSheet(){
         <div class="tick">☐</div>
       </div>
       ${g.l.map(x=>`<div class="lift-r">
-        <div class="rn">${x.n}</div><div class="lof">Lift ${x.l}<small> of ${c.lifts}</small></div>
+        <div class="rn">${x.n}</div><div class="lof">Lift ${x.l}<small> of ${c.lifts}</small>${c.src==='pallex'&&c.decl?.[x.l-1]?`<small style="display:block;font-size:9px">${esc(pxDim(c.decl[x.l-1]))}</small>`:''}</div>
         ${['S / E','L','W','H','KG'].map(k=>`<div class="wb"><i>${k}</i>${sizeDefault(c)&&(k==='L'||k==='W')?`<span style="position:absolute;bottom:3px;right:6px;color:#666;font-size:11px">${sizeDefault(c)[k]}</span>`:''}</div>`).join('')}
         <div class="nb"><i>Notes</i></div></div>`).join('')}
     </div>`;}).join('')}`;
@@ -496,8 +534,32 @@ function dims(m,c){
   const est=!(m.kg>0);
   return {L,W,H,kg: est ? Math.round(c.kg/c.lifts*10)/10 : m.kg, est, code: sc?sc[1].toUpperCase()+sc[2]:''};
 }
+// Pallex: compare each measured pallet with the dims the customer entered for that barcode (2cm / 10kg leeway).
+function pxCompare(d, e){
+  if (!e) return 'unknown';
+  const [a1,b1]=[d.L,d.W].sort((x,y)=>x-y), [a2,b2]=[e.L,e.W].sort((x,y)=>x-y), T=2, K=10;
+  const kg = d.est ? e.kg : d.kg;
+  if (a1>a2+T || b1>b2+T || d.H>e.H+T || kg>e.kg+K) return 'bigger';
+  if (a1<a2-T || b1<b2-T || d.H<e.H-T || kg<e.kg-K) return 'smaller';
+  return 'same';
+}
+function analysePallex(c,lifts){
+  const measured = lifts.map(x=>({x, m:dims(state.m[x.n],c)})).filter(o=>o.m);
+  if (!measured.length) return {c,status:'none',lines:[],special:[]};
+  const lines=measured.map(({x,m})=>{ const e=c.decl?.[x.l-1]; if (m.est && e) m=Object.assign({},m,{kg:e.kg});
+    const r=classify(m.L,m.W,m.H,m.kg); return {x,m,r,sk:skPct(m.L,m.W,m.kg),decl:e,cmp:pxCompare(m,e),err:r.err}; });
+  const partial=measured.length<lifts.length;
+  let status = lines.some(l=>l.err||l.cmp==='bigger') ? 'up' : lines.some(l=>l.cmp==='smaller') ? 'down' : lines.some(l=>l.cmp==='unknown') ? 'chg' : 'ok';
+  if (partial && status==='down') status='chg';
+  const special=lines.filter(l=>l.sk && l.sk.pct!==100 && !l.err);
+  if (status==='ok' && special.length) status='chg';
+  if (partial && status==='ok') status='part';
+  return {c,status,lines,partial,special,declared:{},should:{},pallex:true};
+}
+function pxChanges(r){ return r.lines.filter(l=>l.cmp!=='same').map(l=>`Lift ${l.x.l}: ${l.decl?`${l.decl.L}×${l.decl.W}×${l.decl.H} ${l.decl.kg}kg`:'?'} → <b>${l.m.L}×${l.m.W}×${l.m.H} ${l.m.kg}kg</b>`); }
 function analyseCon(c,lifts){
   if (lifts.some(x=>state.m[x.n]?.same)) resolveSame(c);
+  if (c.src==='pallex') return analysePallex(c,lifts);
   const measured = lifts.map(x=>({x, m:dims(state.m[x.n],c)})).filter(o=>o.m);
   if (!measured.length) return {c,status:'none',lines:[]};
   const declared=parseBU(c.bu), should={}; const lines=[];
@@ -527,11 +589,12 @@ function actionHtml(r){
   if (c.src==='depot') return r.status==='ok' ? '<span class="pill ok">Correct</span>'
     : `<span class="pill chg">Keyed wrong</span><div style="margin-top:4px">Change <b>${esc(c.bu)}</b> → <b>${buStr(r.should)}</b>${r.partial?' <span class="warn">+ unmeasured</span>':''}<br><span class="small">Depot collection – no revenue check.</span></div>`;
   if (r.status==='ok') return '<span class="pill ok">Correct</span>';
+  if (r.pallex && !r.special.length && r.status==='chg') return '<span class="pill chg">Check</span><div class="small">No entered dims for some pallets – compare by hand.</div>';
   const skDone = r.special.length ? skCharge(r) : null;
   const rule = skDone&&skDone.total!=null ? `Set the charge to <b>${gbp(Math.max(skDone.total,c.rev))}</b>`
     : r.status==='down' ? `Keep the charge at <b>${gbp(c.rev)}</b>`
     : `Re-price. If it comes out under <b>${gbp(c.rev)}</b>, set it back to ${gbp(c.rev)}`;
-  const chg = buStr(r.declared)===buStr(r.should) ? '' : `Change <b>${esc(c.bu)}</b> → <b>${buStr(r.should)}</b>${r.partial?' <span class="warn">+ unmeasured</span>':''}<br>`;
+  const chg = r.pallex ? (pxChanges(r).length?`Change in Nexus:<br>${pxChanges(r).join('<br>')}${r.partial?' <span class="warn">+ unmeasured</span>':''}<br>`:'') : buStr(r.declared)===buStr(r.should) ? '' : `Change <b>${esc(c.bu)}</b> → <b>${buStr(r.should)}</b>${r.partial?' <span class="warn">+ unmeasured</span>':''}<br>`;
   const skc = r.special.length ? skCharge(r) : null;
   const sk = r.special.length ? `<div class="small" style="margin-top:6px">${r.special.map(l=>`Row ${l.x.n}: SK <b>${l.sk.pct==='POA'?'POA':l.sk.pct+'%'}</b> (${skParts(l)})${l.sk.notes.length?` <span class="warn">${l.sk.notes.join('; ')}</span>`:''}`).join('<br>')}</div>
     ${skc&&skc.total!=null ? `<div style="margin-top:4px">Oversize charge: <b>${gbp(Math.max(skc.total,c.rev))}</b> <button class="btn skBtn" data-id="${c.id}" style="padding:3px 8px;font-size:13px">Edit</button></div>`
@@ -554,7 +617,7 @@ function skCharge(r){
 }
 // Extra revenue made by a change. null = not a revenue con; undefined = needs the new price typing in.
 function extraRev(r){
-  const c=r.c; if (c.src!=='cust' || !['up','down','chg'].includes(r.status)) return null;
+  const c=r.c; if (!PAID(c) || !['up','down','chg'].includes(r.status)) return null;
   const k = r.special&&r.special.length ? skCharge(r) : null;
   if (k&&k.total!=null) return Math.max(k.total,c.rev)-c.rev;
   if (r.status==='down') return 0;
@@ -602,7 +665,10 @@ function openSk(id){
 function closeSk(){ document.getElementById('skModal').hidden=true; }
 
 function liftType(c,x){
-  const m=dims(state.m[x.n],c); if(!m) return '';
+  const m=dims(state.m[x.n],c);
+  if (c.src==='pallex'){ const e=c.decl?.[x.l-1]; if(!m) return e?`<span class="small">entered ${esc(pxDim(e))}</span>`:'';
+    const k=pxCompare(m,e); return `<span style="color:${k==='bigger'?'#b3261e':k==='smaller'?'#8a5a00':'inherit'}">${k==='bigger'?'Bigger':k==='smaller'?'Smaller':k==='same'?'Matches':'?'}</span><div class="small" style="font-weight:400">entered ${esc(pxDim(e)||'–')}</div>`; }
+  if(!m) return '';
   const r=classify(m.L,m.W,m.H,m.kg);
   return r.err ? `<span class="warn">${r.err}</span>` : r.units.map(code).join('+') + (m.est?`<div class="small" style="font-weight:400">${m.kg}kg as booked</div>`:'') + (r.warn.length?`<div class="warn" style="font-weight:400">${r.warn.join('; ')}</div>`:'');
 }
@@ -616,7 +682,7 @@ function renderCheck(){
     ${G.map(g=>{ const c=g.c, r=analyseCon(c,g.l);
       const head = c.src!==prevSrc ? `<tbody><tr><td colspan="10" style="background:#1f3a68;color:#fff;font-weight:700">${SRC_NAME[c.src]}</td></tr></tbody>` : ''; prevSrc=c.src;
       return head + `<tbody data-id="${c.id}" data-st="${r.status}">` + g.l.map((x,i)=>{ const m=state.m[x.n]||{}, ph=state.ph?.[x.n]||{};
-        return `<tr>${i===0?`<td class="info" rowspan="${g.l.length}"><b>${esc(c.con)}</b>${g.l.length>1?` <button class="btn sameAll" data-id="${c.id}" title="Copy lift 1's sizes to every lift" style="padding:2px 8px;font-size:12px;float:right">Same as lift 1</button>`:''}<div class="small">${c.src==='depot'?'Collect '+esc(c.colPc):esc(c.cust)}<br>${esc(c.pc)} · declared <b>${esc(c.bu)}</b> · ${c.kg}kg${c.src==='cust'?(c.rev?' · '+gbp(c.rev):''):''}</div>${c.src==='cust'&&(!c.rev||c.revEdit)?`<div class="small" style="margin-top:4px">Revenue £ <input type="number" step="any" class="revIn" data-id="${c.id}" value="${c.rev||''}" style="width:80px;padding:3px;font-size:14px;display:inline-block${c.rev?'':';border-color:#b3261e'}">${c.rev?'':' <span class="warn">missing</span>'}</div>`:''}</td>`:''}
+        return `<tr>${i===0?`<td class="info" rowspan="${g.l.length}"><b>${esc(c.con)}</b>${g.l.length>1?` <button class="btn sameAll" data-id="${c.id}" title="Copy lift 1's sizes to every lift" style="padding:2px 8px;font-size:12px;float:right">Same as lift 1</button>`:''}<div class="small">${c.src==='depot'?'Collect '+esc(c.colPc):esc(c.cust)}<br>${esc(c.pc)} · ${c.src==='pallex'?'Pallex ':''}declared <b>${esc(c.bu)}</b> · ${c.kg}kg${PAID(c)?(c.rev?' · '+gbp(c.rev):''):''}</div>${PAID(c)&&(!c.rev||c.revEdit)?`<div class="small" style="margin-top:4px">Revenue £ <input type="number" step="any" class="revIn" data-id="${c.id}" value="${c.rev||''}" style="width:80px;padding:3px;font-size:14px;display:inline-block${c.rev?'':';border-color:#b3261e'}">${c.rev?'':' <span class="warn">missing</span>'}</div>`:''}</td>`:''}
           <td><b>${x.n}</b></td><td class="small">${x.l}/${c.lifts}</td>
           <td><input class="dim code${ph.code?' ph':''}" type="text" data-n="${x.n}" data-f="code" value="${esc(m.code??'')}" style="width:62px;text-transform:uppercase"></td>
           ${['L','W','H','kg'].map(f=>`<td><input class="dim${ph[f]?' ph':''}" ${sizeDefault(c)&&(f==='L'||f==='W')?`placeholder="${sizeDefault(c)[f]}" title="Default for this customer – type to change"`:''} type="number" inputmode="decimal" step="any" data-n="${x.n}" data-f="${f}" value="${m[f]??''}"></td>`).join('')}
@@ -635,8 +701,8 @@ function refreshCon(id){
 function renderStats(G){
   const res=G.map(g=>analyseCon(g.c,g.l)); window._res=res;
   const cnt=f=>res.filter(f).length;
-  const items=[['up','Under-declared',r=>r.c.src==='cust'&&r.status==='up'],['down','Over-declared',r=>r.c.src==='cust'&&r.status==='down'],
-    ['chg','Surcharge / check',r=>r.c.src==='cust'&&r.status==='chg'],['chg','Depot cols keyed wrong',r=>r.c.src==='depot'&&['up','down','chg'].includes(r.status)],
+  const items=[['up','Under-declared',r=>PAID(r.c)&&r.status==='up'],['down','Over-declared',r=>PAID(r.c)&&r.status==='down'],
+    ['chg','Surcharge / check',r=>PAID(r.c)&&r.status==='chg'],['chg','Depot cols keyed wrong',r=>r.c.src==='depot'&&['up','down','chg'].includes(r.status)],
     ['ok','Correct',r=>r.status==='ok'],['','Still to measure',r=>r.status==='none'||r.status==='part']];
   document.getElementById('stats').innerHTML=items.map(([k,t,f])=>`<div class="stat"><span class="pill ${k}">${t}</span><b>${cnt(f)}</b></div>`).join('');
 }
@@ -650,7 +716,7 @@ function liftDims(r, cols){
   const t = r.lines.map(l=>{
     if (l.err) return `<span>Row ${l.x.n} · lift ${l.x.l}/${r.c.lifts}: <span class="warn">${esc(l.err)}</span></span>`;
     const m=l.m, sz=`${m.L} × ${m.W} × ${m.H} cm`;
-    return `<span>Row ${l.x.n} · lift ${l.x.l}/${r.c.lifts}: <b>${m.code?esc(m.code)+' ('+sz+')':sz}</b> · ${m.kg}kg${m.est?' (booked)':''} → <b>${l.r.units.map(code).join('+')}</b></span>`;
+    return `<span>Row ${l.x.n} · lift ${l.x.l}/${r.c.lifts}: <b>${m.code?esc(m.code)+' ('+sz+')':sz}</b> · ${m.kg}kg${m.est?' (booked)':''}${r.pallex?'':` → <b>${l.r.units.map(code).join('+')}</b>`}</span>`;
   }).join('');
   return `<tr class="dimrow"><td></td><td colspan="${cols-1}">${t}</td></tr>`;
 }
@@ -662,11 +728,11 @@ function renderSummary(){
   const el=document.getElementById('summary');
   if (!G.length){ el.innerHTML='<p class="hint">Load an export on step 1 first.</p>'; return; }
   const todo=r=>['up','down','chg'].includes(r.status);
-  const cust=res.filter(r=>r.c.src==='cust'&&todo(r)), dep=res.filter(r=>r.c.src==='depot'&&todo(r));
+  const cust=res.filter(r=>PAID(r.c)&&todo(r)), dep=res.filter(r=>r.c.src==='depot'&&todo(r));
   const left=res.filter(r=>r.status==='none'||r.status==='part'), ok=res.filter(r=>r.status==='ok');
   const ex=cust.map(extraRev); window._extra={total:ex.filter(v=>v>0).reduce((a,b)=>a+b,0), missing:ex.filter(v=>v===undefined).length};
   const SHORT={up:'Under',down:'Over',chg:'Check'};
-  const chg=r=> buStr(r.declared)===buStr(r.should) ? '<span class="hint">type OK</span>' : `${esc(r.c.bu)} → <b>${buStr(r.should)}</b>${r.partial?' <span class="warn">+?</span>':''}`;
+  const chg=r=> r.pallex ? (pxChanges(r).map(t=>t.replace(/Lift (\d+): /,'L$1 ')).join('<br>')||'<span class="hint">dims OK</span>') : buStr(r.declared)===buStr(r.should) ? '<span class="hint">type OK</span>' : `${esc(r.c.bu)} → <b>${buStr(r.should)}</b>${r.partial?' <span class="warn">+?</span>':''}`;
   const charge=r=>{ const k=r.special.length?skCharge(r):null;
     const pct=r.special.length?` <span class="hint">(${r.special.map(l=>l.sk.pct==='POA'?'POA':l.sk.pct+'%').join(', ')})</span>`:'';
     if (k&&k.total!=null) return `Set <b>${gbp(Math.max(k.total,r.c.rev))}</b>${pct}`;
@@ -676,9 +742,9 @@ function renderSummary(){
   const newp=r=>{ const k=r.special.length?skCharge(r):null;
     return k&&k.total!=null ? gbp(Math.max(k.total,r.c.rev)) : r.status==='down' ? gbp(r.c.rev) : newRevInput(r.c).replace('New price £ ','£ '); };
   const dimLine=r=> r.lines.map(l=> l.err ? `<span class="warn">R${l.x.n}: ${esc(l.err)}</span>`
-    : `<span>R${l.x.n}${r.c.lifts>1?` (${l.x.l}/${r.c.lifts})`:''}: ${l.m.code?esc(l.m.code)+' = ':''}${l.m.L}×${l.m.W}×${l.m.H} · ${l.m.kg}kg${l.m.est?'*':''} → ${l.r.units.map(code).join('+')}</span>`).join('');
+    : `<span>R${l.x.n}${r.c.lifts>1?` (${l.x.l}/${r.c.lifts})`:''}: ${l.m.code?esc(l.m.code)+' = ':''}${l.m.L}×${l.m.W}×${l.m.H} · ${l.m.kg}kg${l.m.est?'*':''}${r.pallex?'':' → '+l.r.units.map(code).join('+')}</span>`).join('');
   // group customer cons under one heading per customer
-  const byCust=[]; cust.forEach(r=>{ const g=byCust.find(g=>g.name===r.c.cust); if(g) g.rs.push(r); else byCust.push({name:r.c.cust, rs:[r]}); });
+  const byCust=[]; cust.forEach(r=>{ const nm=r.c.cust+(r.c.src==='pallex'?' (Pallex)':''); const g=byCust.find(g=>g.name===nm); if(g) g.rs.push(r); else byCust.push({name:nm, rs:[r]}); });
   byCust.sort((a,b)=>a.name.localeCompare(b.name));
   el.innerHTML = `
     <div class="sh-top" style="margin-bottom:6px"><div><b>Night Check – change list</b> <span>${new Date().toLocaleDateString('en-GB')}</span></div>
@@ -688,7 +754,7 @@ function renderSummary(){
     ${cust.length?`<table class="sumt${land?' land':''}"><colgroup>${land
         ? '<col style="width:20px"><col style="width:12%"><col style="width:7%"><col style="width:5%"><col style="width:15%"><col><col style="width:16%"><col style="width:8%"><col style="width:6%">'
         : '<col style="width:24px"><col style="width:16%"><col style="width:9%"><col style="width:8%"><col><col><col style="width:11%"><col style="width:9%">'}</colgroup>
-      <thead><tr><th>✔</th><th>Con No</th><th>Del PC</th><th></th><th>Pallet type</th>${land?'<th>Measured</th>':''}<th>Charge</th><th>New £</th><th class="money">Extra £</th></tr></thead><tbody>
+      <thead><tr><th>✔</th><th>Con No</th><th>Del PC</th><th></th><th>Change</th>${land?'<th>Measured</th>':''}<th>Charge</th><th>New £</th><th class="money">Extra £</th></tr></thead><tbody>
       ${byCust.map(g=>`<tr class="custh"><td colspan="${land?9:8}">${esc(g.name)}${g.rs.length>1?` <span>(${g.rs.length})</span>`:''}</td></tr>`+g.rs.map(r=>{ const e=extraRev(r);
         return `<tr class="c1"><td class="tk">☐</td><td><b>${esc(r.c.con)}</b></td><td>${esc(r.c.pc)}</td><td class="st ${r.status}">${SHORT[r.status]}</td><td>${chg(r)}</td>${land?`<td class="dims">${dimLine(r)}</td>`:''}<td>${charge(r)}</td><td>${newp(r)}</td><td class="money"><b>${e===undefined?'–':gbp(e)}</b></td></tr>
           ${land?'':`<tr class="dimrow"><td></td><td colspan="7">${dimLine(r)}</td></tr>`}`; }).join('')).join('')}
@@ -712,8 +778,8 @@ function renderPreview(){
   if (!all.length && !hidden.length){ card.style.display='none'; return; }
   card.style.display='';
   const pick=state.pick||{cust:{},depot:false};
-  const custNames=[...new Set(all.filter(c=>c.src==='cust').map(c=>c.cust))].sort();
-  const cnt=n=>all.filter(c=>c.src==='cust'&&c.cust===n).length, depN=all.filter(c=>c.src==='depot').length;
+  const custNames=[...new Set(all.filter(c=>c.src!=='depot').map(c=>c.cust))].sort();
+  const cnt=n=>all.filter(c=>c.src!=='depot'&&c.cust===n).length, depN=all.filter(c=>c.src==='depot').length;
   const chips = `<div class="pick">
       <span class="hint" style="margin-right:4px">On the sheet:</span>
       <button class="btn pickAll" style="padding:3px 10px">All</button><button class="btn pickNone" style="padding:3px 10px">None</button>
@@ -729,7 +795,7 @@ function renderPreview(){
   el.innerHTML = chips + `<p class="hint" style="margin:6px 0">${rows.length} cons / ${G.reduce((t,g)=>t+g.l.length,0)} lifts on the sheet. Click a column heading to sort (this only changes the preview).</p>
     <table class="ck"><thead><tr>${cols.map(([k,t])=>`<th class="srt" data-k="${k}">${t}${pvSort.k===k?(pvSort.dir>0?' ▲':' ▼'):''}</th>`).join('')}<th></th></tr></thead><tbody>
     ${rows.map(c=>{ const sec=(!pvSort.k && c.src!==prev)?`<tr><td colspan="9" style="background:#1f3a68;color:#fff;font-weight:700">${SRC_NAME[c.src]}</td></tr>`:''; prev=c.src;
-      return sec+`<tr><td><b>${esc(c.con)}</b></td><td>${c.src==='depot'?'<span class="hint">Depot col</span> '+esc(c.colPc):esc(c.cust)}</td><td>${esc(c.pc)}</td><td>${esc(c.bu)}</td><td>${c.lifts}</td><td>${c.kg}</td><td>${c.src==='cust'?gbp(c.rev):'–'}</td><td class="small">${esc(c.status)}</td>
+      return sec+`<tr><td><b>${esc(c.con)}</b></td><td>${c.src==='depot'?'<span class="hint">Depot col</span> '+esc(c.colPc):esc(c.cust)}</td><td>${esc(c.pc)}</td><td>${esc(c.bu)}</td><td>${c.lifts}</td><td>${c.kg}</td><td>${PAID(c)?gbp(c.rev):'–'}</td><td class="small">${c.src==='pallex'?'Pallex':esc(c.status)}</td>
         <td><button class="btn rmJob" data-id="${c.id}" title="Leave this job off the sheet" style="padding:3px 10px">✕</button></td></tr>`; }).join('')}
     </tbody></table>
     ${hidden.length?`<p class="small" style="margin-top:10px"><b>Removed:</b> ${hidden.map(c=>`${esc(c.con)} <a href="#" class="putBack" data-id="${c.id}">put back</a>`).join(' · ')}</p>`:''}`;
@@ -765,7 +831,7 @@ document.getElementById('preview').addEventListener('click',e=>{
     if (measuredAlready()){ blockedMsg(); return; }
     const none=!!e.target.closest('.pickNone');
     state.pick={cust:{},depot:none};
-    if (none) groupsOf(liftList(true)).forEach(g=>{ if(g.c.src==='cust') state.pick.cust[g.c.cust]=true; });
+    if (none) groupsOf(liftList(true)).forEach(g=>{ if(g.c.src!=='depot') state.pick.cust[g.c.cust]=true; });
     save(); renderAll(); return;
   }
 
@@ -848,7 +914,7 @@ document.getElementById('check').addEventListener('input',e=>{
 });
 document.getElementById('copyBtn').addEventListener('click',async()=>{
   const txt=(window._res||[]).filter(r=>['up','down','chg'].includes(r.status)).map(r=>
-    `${r.c.con}\t${r.c.src==='depot'?'Depot col':r.c.cust}\t${(()=>{const v=extraRev(r);return v==null||v===undefined?'':'extra '+gbp(v);})()}\t${r.c.src==='depot'?'Keyed wrong':LABEL[r.status]}\t${r.c.bu} -> ${buStr(r.should||{})}\t${r.c.src==='depot'?'no revenue check':(()=>{const k=r.special&&r.special.length?skCharge(r):null; return k&&k.total!=null?'set '+gbp(Math.max(k.total,r.c.rev)):r.status==='down'?'keep '+gbp(r.c.rev):'min '+gbp(r.c.rev);})()}`).join('\n');
+    `${r.c.con}\t${r.c.src==='depot'?'Depot col':r.c.cust+(r.c.src==='pallex'?' (Pallex)':'')}\t${(()=>{const v=extraRev(r);return v==null||v===undefined?'':'extra '+gbp(v);})()}\t${r.c.src==='depot'?'Keyed wrong':LABEL[r.status]}\t${r.c.bu} -> ${buStr(r.should||{})}\t${r.c.src==='depot'?'no revenue check':(()=>{const k=r.special&&r.special.length?skCharge(r):null; return k&&k.total!=null?'set '+gbp(Math.max(k.total,r.c.rev)):r.status==='down'?'keep '+gbp(r.c.rev):'min '+gbp(r.c.rev);})()}`).join('\n');
   try{ await navigator.clipboard.writeText(txt); document.getElementById('copyBtn').textContent='Copied'; setTimeout(()=>document.getElementById('copyBtn').textContent='Copy change list',1500);}catch(e){}
 });
 
@@ -941,6 +1007,8 @@ document.getElementById('loadNight').addEventListener('change',e=>{
   rd.readAsText(f);
 });
 
+function parseEntered(t){ const m=String(t||'').match(/([A-Z]+)?\s*(\d+)\s*[x×X]\s*(\d+)\s*[x×X]\s*(\d+)(?:\s+([\d.]+)\s*kg)?/i);
+  return m ? {type:(m[1]||'').toUpperCase(), L:+m[2], W:+m[3], H:+m[4], kg:+(m[5]||0)} : null; }
 let photoMode='match';
 const num = v => { if (v==null) return 0; const n=parseFloat(String(v).replace(/[^0-9.\-]/g,'')); return isFinite(n)?n:0; };
 document.getElementById('photoStartBtn').addEventListener('click',()=>{ photoMode='sheet'; document.getElementById('photoIn').click(); });
@@ -975,29 +1043,29 @@ Include only rows where something is written. Use null for any box that is blank
       msg.textContent=`Read ${n} lifts from the photo${left?` – ${left} lift(s) still have no sizes`:''}. Yellow = read from photo.`;
     } else {
       const out=await sampleFn.json(`These are photos of the pages of a printed "SK Distribution – Night measure sheet" that staff have filled in by hand.
-The printed table has two sections: "OUR CUSTOMERS" and "DEPOT COLLECTIONS". Printed columns: Row (bold number), Con No, Customer (in Depot collections this column is "Collect from" and holds a postcode), Del PC, Declared (pallet codes such as "QP-1" or "LP-1,HP-1", sometimes with a small tag underneath: SAT, TIMED or AM), Con kg, £ (consignment revenue; "–" in Depot collections), Lift (e.g. "1/2").
+The printed table has up to three sections: "OUR CUSTOMERS", "PALLEX" and "DEPOT COLLECTIONS". In the PALLEX section the "Entered" column shows, on every lift row, the size the customer entered for that pallet, e.g. "HALF 120×80×120 100kg" – copy it into "declared" for each row. Printed columns: Row (bold number), Con No, Customer (in Depot collections this column is "Collect from" and holds a postcode), Del PC, Declared (pallet codes such as "QP-1" or "LP-1,HP-1", sometimes with a small tag underneath: SAT, TIMED or AM), Con kg, £ (consignment revenue; "–" in Depot collections), Lift (e.g. "1/2").
 A consignment with several lifts prints its details on the first lift row only; the following rows are blank apart from Row and Lift – they belong to the consignment above, so repeat its details on them.
 ${HAND}
 
 Read EVERY printed row on every page, written on or not. Return ONLY JSON:
-{"rows":[{"row":<number>,"section":"customers"|"depot","con":<string>,"customer":<string>,"delPc":<string>,"declared":<string>,"tag":<"SAT"|"TIMED"|"AM"|null>,"conKg":<number>,"revenue":<number|null>,"lift":<number>,"lifts":<number>,"code":<string|null>,"same":<true|false>,"L":<number|null>,"W":<number|null>,"H":<number|null>,"kg":<number|null>}]}
+{"rows":[{"row":<number>,"section":"customers"|"pallex"|"depot","con":<string>,"customer":<string>,"delPc":<string>,"declared":<string>,"tag":<"SAT"|"TIMED"|"AM"|null>,"conKg":<number>,"revenue":<number|null>,"lift":<number>,"lifts":<number>,"code":<string|null>,"same":<true|false>,"L":<number|null>,"W":<number|null>,"H":<number|null>,"kg":<number|null>}]}
 Give conKg, revenue and the hand-written boxes as plain numbers (no £ sign or units). Copy other printed text exactly. For hand-written boxes use null when blank or not readable with confidence – never guess.`,{images:files,modelTier:'complex'});
       const rows=((out&&out.rows)||[]).filter(r=>r.con && r.declared).sort((a,b)=>(+a.row)-(+b.row));
       if (!rows.length) throw {code:'empty'};
       // one consignment per section+con
       const cons=new Map();
-      rows.forEach(r=>{ const src=r.section==='depot'?'depot':'cust', key=src+'|'+String(r.con).trim();
+      rows.forEach(r=>{ const src=r.section==='depot'?'depot':r.section==='pallex'?'pallex':'cust', key=src+'|'+String(r.con).trim();
         if(!cons.has(key)) cons.set(key,{id:'ph'+cons.size, src, ord:+r.row, con:String(r.con).trim(),
-          cust: src==='cust'?String(r.customer||''):'', colPc: src==='depot'?String(r.customer||'').toUpperCase():'',
+          cust: src!=='depot'?String(r.customer||''):'', colPc: src==='depot'?String(r.customer||'').toUpperCase():'', decl: src==='pallex'?[]:undefined,
           pc:String(r.delPc||'').toUpperCase(), bu:String(r.declared||''), kg:num(r.conKg), rev:num(r.revenue),
           lifts:Math.max(1,num(r.lifts)||1), svc:r.tag==='SAT'?'SATURDAY':r.tag==='TIMED'?'TIMED':r.tag==='AM'?'AM':'',
           code:'', dep:'', colDep:'', status:'', due:'', hub:''});
-        const c=cons.get(key); c.lifts=Math.max(c.lifts,num(r.lift)||1,num(r.lifts)||1); if(!c.rev&&num(r.revenue)) c.rev=num(r.revenue); if(!c.kg&&num(r.conKg)) c.kg=num(r.conKg); });
+        const c=cons.get(key); c.lifts=Math.max(c.lifts,num(r.lift)||1,num(r.lifts)||1); if(c.decl){ const d=parseEntered(r.declared); if(d) c.decl[(num(r.lift)||1)-1]=d; } if(!c.rev&&num(r.revenue)) c.rev=num(r.revenue); if(!c.kg&&num(r.conKg)) c.kg=num(r.conKg); });
       state.rows=[...cons.values()]; state.files={cust:'photos of the sheet',depot:'photos of the sheet'}; state.m={}; state.ph={}; state.ex={};
       document.getElementById('hideZero').checked=false;
       // put the hand-written values on the matching lift
       const L=liftList(); let n=0;
-      rows.forEach(r=>{ const src=r.section==='depot'?'depot':'cust';
+      rows.forEach(r=>{ const src=r.section==='depot'?'depot':r.section==='pallex'?'pallex':'cust';
         const x=L.find(x=>x.c.src===src && x.c.con===String(r.con).trim() && x.l===(num(r.lift)||1));
         if (x && (r.code||r.L||r.W||r.H||r.kg)){ applyHand(x.n,r); n++; } });
       save(); renderAll();
