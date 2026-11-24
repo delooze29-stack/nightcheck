@@ -61,6 +61,12 @@
   .ex label:has(input:checked){border-color:var(--teal);background:#e8f5f8}
   .calcbox{background:#f4f6f9;border-radius:6px;padding:10px;margin-top:12px;font-size:14px;line-height:1.6}
   .calcbox .big{font-size:22px;font-weight:800;color:var(--navy)}
+  .pick{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:4px}
+  .chip{display:inline-flex;gap:6px;align-items:center;border:1px solid var(--line);border-radius:999px;padding:4px 10px;font-size:13px;cursor:pointer;background:#fff}
+  .chip:has(input:checked){border-color:var(--teal);background:#e8f5f8}
+  .chip span{color:var(--muted);font-size:12px}
+  .chip.dep{border-style:dashed}
+  th.srt{cursor:pointer;user-select:none}th.srt:hover{color:var(--teal)}
   .ck{width:100%;border-collapse:collapse}
   .ck tbody{border-top:2px solid #b9c1cc}
   .ck td{border-bottom:1px solid var(--line);padding:4px 6px}
@@ -373,7 +379,8 @@ function loadCSV(text, name, src){
 function oddAccounts(){ return String(state.oddball??'JC999, ODDBALL JOBS').toUpperCase().split(/[,;\s]+/).filter(Boolean); }
 function isOddball(c){ const a=oddAccounts(); return c.src==='cust' && (a.includes((c.code||'').toUpperCase()) || a.includes((c.cust||'').toUpperCase())); }
 function oddLeftOut(c){ const ours=(state.filter.cust.depot||'59'); return isOddball(c) && !(c.dep && c.dep!==ours && c.rev>0); }
-function liftList(){
+function liftList(ignorePick){
+  const pick = ignorePick ? {} : (state.pick||{});
   const hide = document.getElementById('hideZero').checked;
   const out=[]; let n=1;
   ['cust','depot'].forEach(src=>{
@@ -382,6 +389,8 @@ function liftList(){
       && !(src==='cust' && hide && !c.rev)
       && !(src==='cust' && oddLeftOut(c))
       && !state.removed?.[c.id]
+      && !(src==='cust' && pick.cust && pick.cust[c.cust])
+      && !(src==='depot' && pick.depot)
       && !(f.depot && c.colDep && c.colDep !== f.depot)
       && !(c.status && !f.statuses.includes(c.status)))
     .sort((a,b)=> (a.ord!=null&&b.ord!=null) ? a.ord-b.ord : src==='cust' ? (a.cust.localeCompare(b.cust) || a.con.localeCompare(b.con)) : (a.colPc.localeCompare(b.colPc) || a.con.localeCompare(b.con)))
@@ -694,20 +703,38 @@ function renderSummary(){
   window._sum={cust,dep};
 }
 
+let pvSort={k:null,dir:1};
 function renderPreview(){
   const card=document.getElementById('previewCard'), el=document.getElementById('preview');
-  const G=groupsOf(liftList());
+  const all=groupsOf(liftList(true)).map(g=>g.c);           // everything that could go on the sheet
+  const G=groupsOf(liftList());                               // what will go on it
   const hidden=state.rows.filter(c=>state.removed?.[c.id]);
-  if (!G.length && !hidden.length){ card.style.display='none'; return; }
+  if (!all.length && !hidden.length){ card.style.display='none'; return; }
   card.style.display='';
+  const pick=state.pick||{cust:{},depot:false};
+  const custNames=[...new Set(all.filter(c=>c.src==='cust').map(c=>c.cust))].sort();
+  const cnt=n=>all.filter(c=>c.src==='cust'&&c.cust===n).length, depN=all.filter(c=>c.src==='depot').length;
+  const chips = `<div class="pick">
+      <span class="hint" style="margin-right:4px">On the sheet:</span>
+      <button class="btn pickAll" style="padding:3px 10px">All</button><button class="btn pickNone" style="padding:3px 10px">None</button>
+      ${depN?`<label class="chip dep"><input type="checkbox" data-dep="1" ${pick.depot?'':'checked'}> Depot collections <span>${depN}</span></label>`:''}
+      ${custNames.map(n=>`<label class="chip"><input type="checkbox" data-cust="${esc(n)}" ${pick.cust?.[n]?'':'checked'}> ${esc(n)} <span>${cnt(n)}</span></label>`).join('')}
+    </div>`;
+  const cols=[['con','Con No'],['who','Customer / collect from'],['pc','Del PC'],['bu','Declared'],['lifts','Lifts'],['kg','Kg'],['rev','£'],['status','Status']];
+  const val=(c,k)=>k==='who'?(c.src==='depot'?c.colPc:c.cust):c[k];
+  let rows=G.map(g=>g.c);
+  if (pvSort.k){ rows=rows.slice().sort((a,b)=>{ const x=val(a,pvSort.k), y=val(b,pvSort.k);
+    return (typeof x==='number'&&typeof y==='number' ? x-y : String(x).localeCompare(String(y),undefined,{numeric:true}))*pvSort.dir; }); }
   let prev=null;
-  el.innerHTML=`<table class="ck"><thead><tr><th>Con No</th><th>Customer / collect from</th><th>Del PC</th><th>Declared</th><th>Lifts</th><th>Kg</th><th>£</th><th>Status</th><th></th></tr></thead><tbody>
-    ${G.map(({c})=>{ const sec=c.src!==prev?`<tr><td colspan="9" style="background:#1f3a68;color:#fff;font-weight:700">${SRC_NAME[c.src]}</td></tr>`:''; prev=c.src;
-      return sec+`<tr><td><b>${esc(c.con)}</b></td><td>${c.src==='depot'?esc(c.colPc):esc(c.cust)}</td><td>${esc(c.pc)}</td><td>${esc(c.bu)}</td><td>${c.lifts}</td><td>${c.kg}</td><td>${c.src==='cust'?gbp(c.rev):'–'}</td><td class="small">${esc(c.status)}</td>
+  el.innerHTML = chips + `<p class="hint" style="margin:6px 0">${rows.length} cons / ${G.reduce((t,g)=>t+g.l.length,0)} lifts on the sheet. Click a column heading to sort (this only changes the preview).</p>
+    <table class="ck"><thead><tr>${cols.map(([k,t])=>`<th class="srt" data-k="${k}">${t}${pvSort.k===k?(pvSort.dir>0?' ▲':' ▼'):''}</th>`).join('')}<th></th></tr></thead><tbody>
+    ${rows.map(c=>{ const sec=(!pvSort.k && c.src!==prev)?`<tr><td colspan="9" style="background:#1f3a68;color:#fff;font-weight:700">${SRC_NAME[c.src]}</td></tr>`:''; prev=c.src;
+      return sec+`<tr><td><b>${esc(c.con)}</b></td><td>${c.src==='depot'?'<span class="hint">Depot col</span> '+esc(c.colPc):esc(c.cust)}</td><td>${esc(c.pc)}</td><td>${esc(c.bu)}</td><td>${c.lifts}</td><td>${c.kg}</td><td>${c.src==='cust'?gbp(c.rev):'–'}</td><td class="small">${esc(c.status)}</td>
         <td><button class="btn rmJob" data-id="${c.id}" title="Leave this job off the sheet" style="padding:3px 10px">✕</button></td></tr>`; }).join('')}
     </tbody></table>
     ${hidden.length?`<p class="small" style="margin-top:10px"><b>Removed:</b> ${hidden.map(c=>`${esc(c.con)} <a href="#" class="putBack" data-id="${c.id}">put back</a>`).join(' · ')}</p>`:''}`;
 }
+
 function renderAll(){ renderFilters(); renderLoadInfo(); renderPreview(); renderSheet(); renderCheck(); renderSummary(); }
 
 /* ================= Events ================= */
@@ -722,11 +749,29 @@ document.querySelectorAll('.fileIn').forEach(inp=>inp.addEventListener('change',
   const f=e.target.files[0]; if(!f) return; const rd=new FileReader();
   rd.onload=()=>loadCSV(rd.result,f.name,inp.dataset.src); rd.readAsText(f);
 }));
+function measuredAlready(){ return Object.values(state.m||{}).some(v=>v&&Object.values(v).some(q=>q)); }
+function blockedMsg(){ document.getElementById('preview').insertAdjacentHTML('afterbegin','<p class="warn">Measurements are already in for tonight – changing what\u2019s on the sheet now would move the row numbers. Do this before printing, or press Start a new night.</p>'); }
+document.getElementById('preview').addEventListener('change',e=>{
+  const cb=e.target; if(!cb.dataset.cust && !cb.dataset.dep) return;
+  if (measuredAlready()){ cb.checked=!cb.checked; blockedMsg(); return; }
+  state.pick=state.pick||{cust:{},depot:false}; state.pick.cust=state.pick.cust||{};
+  if (cb.dataset.dep) state.pick.depot=!cb.checked; else { if(cb.checked) delete state.pick.cust[cb.dataset.cust]; else state.pick.cust[cb.dataset.cust]=true; }
+  save(); renderAll();
+});
 document.getElementById('preview').addEventListener('click',e=>{
+  const th=e.target.closest('th.srt');
+  if (th){ pvSort = pvSort.k===th.dataset.k ? (pvSort.dir>0?{k:th.dataset.k,dir:-1}:{k:null,dir:1}) : {k:th.dataset.k,dir:1}; renderPreview(); return; }
+  if (e.target.closest('.pickAll')||e.target.closest('.pickNone')){
+    if (measuredAlready()){ blockedMsg(); return; }
+    const none=!!e.target.closest('.pickNone');
+    state.pick={cust:{},depot:none};
+    if (none) groupsOf(liftList(true)).forEach(g=>{ if(g.c.src==='cust') state.pick.cust[g.c.cust]=true; });
+    save(); renderAll(); return;
+  }
+
   const rm=e.target.closest('.rmJob'), pb=e.target.closest('.putBack');
   if (!rm && !pb) return; if (pb) e.preventDefault();
-  if (Object.values(state.m||{}).some(v=>v&&Object.values(v).some(q=>q))){
-    document.getElementById('preview').insertAdjacentHTML('afterbegin','<p class="warn">Measurements are already in for tonight – removing a job now would move the row numbers. Do this before printing, or press Start a new night.</p>'); return; }
+  if (measuredAlready()){ blockedMsg(); return; }
   if (rm) state.removed[rm.dataset.id]=true; else delete state.removed[pb.dataset.id];
   save(); renderAll();
 });
@@ -839,7 +884,7 @@ document.getElementById('newNight').addEventListener('click',()=>{
   b.onclick=()=>{ y.style.display='none'; b.textContent='Start a new night'; b.onclick=null; };
 });
 document.getElementById('newNightYes').addEventListener('click',()=>{
-  state={rows:[], m:{}, files:{}, filter:DEF_FILTER(), oddball:state.oddball, removed:{}}; save();
+  state={rows:[], m:{}, files:{}, filter:DEF_FILTER(), oddball:state.oddball, removed:{}, pick:{cust:{},depot:false}}; save();
   document.querySelectorAll('.fileIn').forEach(i=>i.value='');
   document.getElementById('newNightYes').style.display='none'; const b=document.getElementById('newNight'); b.textContent='Start a new night'; b.onclick=null;
   renderAll(); document.getElementById('loadInfo').textContent='Cleared – ready for tonight.';
