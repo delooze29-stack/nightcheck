@@ -499,7 +499,7 @@ function compactSheet(groups,lifts,d){
   return `<div class="sh-top"><div><b>SK Distribution – Night measure sheet</b><br>
       <span>Collecting depot ${esc(state.filter.cust.depot||state.filter.depot.depot||'all')} · ${groups.length} cons · ${lifts} lifts · cm / kg</span></div>
       <div class="sh-sign">Date <span class="line">${d}</span> Measured by <span class="line"></span></div></div>
-    <div class="sh-key">Standard or euro with no overhang: just write <b>S</b> or <b>E</b> + height in the S / E box (e.g. <b>S70</b>, <b>E80</b>). Oversize: write full <b>L, W, H</b>. KG only if different to booked. <b>All lifts the same?</b> Fill in the first lift, then write <b>SAME</b> (or draw a line down) on the others.</div>
+    <div class="sh-key">Standard or euro with no overhang: just write <b>S</b> or <b>E</b> + height in the S / E box (e.g. <b>S70</b>, <b>E80</b>). Oversize: write full <b>L, W, H</b>. KG only if different to booked. <b>All lifts the same?</b> Fill in the first lift, then just <b>draw a line down</b> through the boxes below it.</div>
     ${SECS().map(src=>{ const gs=groups.filter(g=>secKey(g.c)===src); return gs.length?table(src,gs):''; }).join('')}`;
 }
 function renderSheet(){
@@ -1063,7 +1063,7 @@ let photoMode='match';
 const num = v => { if (v==null) return 0; const n=parseFloat(String(v).replace(/[^0-9.\-]/g,'')); return isFinite(n)?n:0; };
 document.getElementById('photoStartBtn').addEventListener('click',()=>{ photoMode='sheet'; document.getElementById('photoIn').click(); });
 document.getElementById('photoBtn').addEventListener('click',()=>{ photoMode = state.rows.length ? 'match' : 'sheet'; },true);
-const HAND=`On the 2nd and later lifts of a consignment staff may write SAME, a ditto mark (" or 〃) or draw a line down through the boxes to mean \"same as the lift above\" – return \"same\":true for that row and leave its boxes null. Some L and W boxes have a small pre-printed default (e.g. 200 and 100) – if nothing is hand-written over it, return null for that box. The hand-written boxes are "S / E", L, W, H (cm) and KG. In "S / E" staff write S or E followed by a height, e.g. S70 or E80 (S = standard pallet, E = euro pallet); then L/W/H are usually blank. For oversize pallets they write L, W, H instead. KG is often blank.`;
+const HAND=`On the 2nd and later lifts of a consignment staff usually draw a straight line down through the empty boxes (from the lift above) to mean \"same as the lift above\" – they may also write SAME or a ditto mark. Treat any such line, arrow, SAME or ditto as same – return \"same\":true for that row and leave its boxes null. Some L and W boxes have a small pre-printed default (e.g. 200 and 100) – if nothing is hand-written over it, return null for that box. The hand-written boxes are "S / E", L, W, H (cm) and KG. In "S / E" staff write S or E followed by a height, e.g. S70 or E80 (S = standard pallet, E = euro pallet); then L/W/H are usually blank. For oversize pallets they write L, W, H instead. KG is often blank.`;
 function applyHand(k,r){
   state.m[k]=state.m[k]||{}; state.ph=state.ph||{}; state.ph[k]=state.ph[k]||{};
   if (r.same===true || /^(SAME|=|"|〃)$/i.test(String(r.code||'').trim())){ state.m[k]={same:1}; state.ph[k]={code:1}; return; }
