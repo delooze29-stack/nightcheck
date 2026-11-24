@@ -335,7 +335,7 @@ function skPct(L,W,kg){
 }
 
 /* ================= State ================= */
-const DEF_FILTER = () => ({pallex:{depot:'',statuses:[]}, cust:{depot:'59',statuses:['AT COLLECTION DEPOT','IN COLLECTION DEPOT','IN MY DEPOT','NOT BARCODED']},
+const DEF_FILTER = () => ({pallex:{depot:'60',statuses:[]}, cust:{depot:'59',statuses:['AT COLLECTION DEPOT','IN COLLECTION DEPOT','IN MY DEPOT','NOT BARCODED']},
                            depot:{depot:'59',statuses:['REQUESTED','IN MY DEPOT','ACCEPTED','AWAITING ACCEPTANCE']}});
 let state = {rows:[], m:{}, files:{}, filter:DEF_FILTER()};
 try { const s = JSON.parse(localStorage.getItem('nightcheck2')||'null'); if (s && s.rows && s.filter && s.filter.cust) state = s; } catch(e){}
